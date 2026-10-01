@@ -1,190 +1,141 @@
-import { useState } from 'react'
-import './App.css'
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { EventsProvider, useEvents } from './context/EventsContext';
+import Navbar from './components/Navbar';
+import Hoy from './pages/Hoy';
+import Eventos from './pages/Eventos';
+import CrearEvento from './pages/CrearEvento';
+import DetalleEvento from './pages/DetalleEvento';
+import Login from './pages/Login';
+import Progreso from './pages/Progreso';
+import './App.css';
 
-function App() {
-  const [tareas, setTareas] = useState([
-    {
-      id: 1,
-      titulo: 'Confirmar catering',
-      evento: 'Conferencia empresarial',
-      fechaLimite: 'Hoy',
-      horasEstimadas: 2,
-      prioridad: 'Alta',
-      estado: 'Pendiente',
-    },
-    {
-      id: 2,
-      titulo: 'Enviar invitaciones',
-      evento: 'Evento de lanzamiento',
-      fechaLimite: 'Hoy',
-      horasEstimadas: 1,
-      prioridad: 'Media',
-      estado: 'Pendiente',
-    },
-    {
-      id: 3,
-      titulo: 'Reservar el salón',
-      evento: 'Reunión corporativa',
-      fechaLimite: 'Mañana',
-      horasEstimadas: 3,
-      prioridad: 'Media',
-      estado: 'Pendiente',
-    },
-  ])
-  const [mensaje, setMensaje] = useState('')
-
-  const fechaActual = new Intl.DateTimeFormat('es-ES', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date())
-
-  const marcarComoHecha = (id) => {
-    setTareas((tareasActuales) =>
-      tareasActuales.map((tarea) =>
-        tarea.id === id
-          ? { ...tarea, estado: 'Hecha' }
-          : tarea
-      )
-    )
-    const tarea = tareas.find((item) => item.id === id)
-    setMensaje(`${tarea.titulo} se marcó como realizada.`)
+/**
+ * Componente Guardián de Rutas Protegidas
+ * Si el usuario no ha iniciado sesión, lo redirige forzosamente a /login
+ */
+function ProtectedRoute({ children }) {
+  const { currentUser } = useEvents();
+  if (!currentUser || !currentUser.isLoggedIn) {
+    return <Navigate to="/login" replace />;
   }
-
-  const posponerTarea = (id) => {
-    setTareas((tareasActuales) =>
-      tareasActuales.map((tarea) =>
-        tarea.id === id
-          ? { ...tarea, estado: 'Pospuesta', fechaLimite: 'Próximamente' }
-          : tarea
-      )
-    )
-    const tarea = tareas.find((item) => item.id === id)
-    setMensaje(`${tarea.titulo} se pospuso para próximamente.`)
-  }
-
-  const tareasPendientes = tareas.filter(
-    (tarea) => tarea.estado === 'Pendiente'
-  )
-
-  return (
-    <div className="app">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Organizador de eventos</p>
-          <h1>Hoy </h1>
-          <p className="subtitle">
-            Revisa las tareas que requieren tu atención.
-          </p>
-        </div>
-
-        <div className="date-card">
-          <span>{fechaActual}</span>
-        </div>
-      </header>
-
-      <main className="content">
-        <section className="summary">
-          <div>
-            <span className="summary-label">Tareas pendientes</span>
-            <strong>{tareasPendientes.length}</strong>
-          </div>
-
-          <div>
-            <span className="summary-label">Tareas urgentes</span>
-            <strong>
-              {tareasPendientes.filter(
-                (tarea) => tarea.prioridad === 'Alta'
-              ).length}
-            </strong>
-          </div>
-        </section>
-
-        <section className="tasks-section">
-          <div className="section-heading">
-            <div>
-              <h2>Tareas de hoy</h2>
-              <p>Estas son las gestiones que debes revisar primero.</p>
-            </div>
-
-            <span className="task-count">
-              {tareasPendientes.length} pendientes
-            </span>
-          </div>
-
-          {mensaje && <p className="feedback" role="status" aria-live="polite">{mensaje}</p>}
-
-          {tareasPendientes.length === 0 ? (
-            <div className="empty-state">
-              <h3>Todo al día</h3>
-              <p>No tienes tareas pendientes que requieran atención.</p>
-            </div>
-          ) : (
-            <div className="tasks-list">
-              {tareas.map((tarea) => (
-                <article
-                  className={`task-card ${
-                    tarea.estado !== 'Pendiente' ? 'completed' : ''
-                  }`}
-                  key={tarea.id}
-                >
-                  <div className="task-main">
-                    <div className="task-title-row">
-                      <span
-                        className={`priority priority-${tarea.prioridad.toLowerCase()}`}
-                      >
-                        {tarea.prioridad}
-                      </span>
-
-                      <span className="task-status">
-                        {tarea.estado}
-                      </span>
-                    </div>
-
-                    <h3>{tarea.titulo}</h3>
-                    <p className="event-name">{tarea.evento}</p>
-
-                    <div className="task-details">
-                      <span>📅 {tarea.fechaLimite}</span>
-                      <span>⏱️ {tarea.horasEstimadas} horas estimadas</span>
-                    </div>
-                  </div>
-
-                  <div className="task-actions">
-                    <button
-                      className="button button-primary"
-                      onClick={() => marcarComoHecha(tarea.id)}
-                      disabled={tarea.estado !== 'Pendiente'}
-                    >
-                      Marcar como hecha
-                    </button>
-
-                    <button
-                      className="button button-secondary"
-                      onClick={() => posponerTarea(tarea.id)}
-                      disabled={tarea.estado !== 'Pendiente'}
-                    >
-                      Posponer
-                    </button>
-
-                    <button
-                      className="button button-link"
-                      onClick={() =>
-                        alert(`Detalle de la tarea: ${tarea.titulo}`)
-                      }
-                    >
-                      Ver detalle
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      </main>
-    </div>
-  )
+  return children;
 }
 
-export default App
+/**
+ * Layout principal que controla la visibilidad de la Navbar y Footer
+ */
+function MainAppLayout() {
+  const { currentUser } = useEvents();
+  const location = useLocation();
+  const isLoginPage = location.pathname === '/login';
+
+  return (
+    <div className={`app-layout ${isLoginPage ? 'layout-auth' : ''}`}>
+      {/* La barra de navegación superior solo se muestra tras autenticarse */}
+      {currentUser && currentUser.isLoggedIn && !isLoginPage && <Navbar />}
+
+      <main
+        className={`main-content-area ${isLoginPage ? 'main-content-auth' : ''}`}
+        id="main-content"
+      >
+        <Routes>
+          {/* Ruta pública principal: Iniciar Sesión (primera pantalla obligatoria) */}
+          <Route
+            path="/login"
+            element={
+              currentUser && currentUser.isLoggedIn ? (
+                <Navigate to="/" replace />
+              ) : (
+                <Login />
+              )
+            }
+          />
+
+          {/* Rutas protegidas (requieren haber iniciado sesión previamente) */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Hoy />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hoy"
+            element={
+              <ProtectedRoute>
+                <Hoy />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/eventos"
+            element={
+              <ProtectedRoute>
+                <Eventos />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crear-evento"
+            element={
+              <ProtectedRoute>
+                <CrearEvento />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/evento/:id"
+            element={
+              <ProtectedRoute>
+                <DetalleEvento />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/progreso"
+            element={
+              <ProtectedRoute>
+                <Progreso />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Redirección por defecto */}
+          <Route
+            path="*"
+            element={
+              currentUser && currentUser.isLoggedIn ? (
+                <Navigate to="/" replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+        </Routes>
+      </main>
+
+      {/* Footer corporativo Eventify solo en el interior de la plataforma */}
+      {currentUser && currentUser.isLoggedIn && !isLoginPage && (
+        <footer className="main-footer">
+          <div className="footer-content">
+            <p>
+              <strong>Eventify</strong> • Organiza, vive y comparte tus mejores eventos
+            </p>
+          </div>
+        </footer>
+      )}
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <EventsProvider>
+      <BrowserRouter>
+        <MainAppLayout />
+      </BrowserRouter>
+    </EventsProvider>
+  );
+}
