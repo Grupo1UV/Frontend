@@ -359,7 +359,7 @@ export default function Login({ initialMode = 'login' }) {
       // 8. Mensaje de éxito e inicio de sesión automático
       setRegSuccessMsg(
         savedInCloud
-          ? '¡Cuenta creada y guardada en Supabase con éxito! Iniciando sesión...'
+          ? '¡Cuenta creada y guardada con éxito! Iniciando sesión...'
           : '¡Cuenta registrada con éxito! Iniciando sesión...'
       );
 
