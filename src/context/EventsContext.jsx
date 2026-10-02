@@ -248,14 +248,11 @@ export function EventsProvider({ children }) {
       nombre: nuevoEvento.nombre,
       tipo: nuevoEvento.tipo || 'General',
       fecha: nuevoEvento.fecha,
+      lugar: nuevoEvento.lugar || '',
+      asistentes: nuevoEvento.asistentes !== undefined && nuevoEvento.asistentes !== '' ? nuevoEvento.asistentes : '',
       descripcion: nuevoEvento.descripcion || '',
       hasCriticalError: false,
-      subtareas: nuevoEvento.subtareas && nuevoEvento.subtareas.length > 0
-        ? nuevoEvento.subtareas
-        : [
-            { id: `sub-${id}-1`, titulo: 'Planificar requerimientos iniciales', horasEstimadas: 2, fechaLimite: nuevoEvento.fecha, estado: 'Pendiente', responsable: 'Organizador' },
-            { id: `sub-${id}-2`, titulo: 'Confirmar presupuesto y proveedores', horasEstimadas: 3, fechaLimite: nuevoEvento.fecha, estado: 'Pendiente', responsable: 'Organizador' },
-          ],
+      subtareas: Array.isArray(nuevoEvento.subtareas) ? nuevoEvento.subtareas : [],
     };
     setEventos((prev) => [eventoCompleto, ...prev]);
 

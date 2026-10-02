@@ -25,9 +25,9 @@ export default function EventCard({
   const totalSubtareas = evento.subtareas?.length || 0;
   const hechasSubtareas = evento.subtareas?.filter((s) => s.estado === 'Hecha').length || 0;
 
-  // Valores predeterminados fieles a los ejemplos oficiales si no están definidos
-  const lugar = evento.lugar || 'Valle de Bravo';
-  const asistentes = evento.asistentes || 280;
+  // Valores definidos por el usuario en el evento
+  const lugar = evento.lugar || 'Sin lugar asignado';
+  const asistentes = evento.asistentes !== undefined && evento.asistentes !== '' ? evento.asistentes : 'Sin definir';
 
   return (
     <article

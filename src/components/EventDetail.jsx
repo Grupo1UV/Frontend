@@ -31,8 +31,8 @@ export default function EventDetail({
     0
   );
 
-  const lugar = evento.lugar || 'Valle de Bravo';
-  const asistentes = evento.asistentes || 280;
+  const lugar = evento.lugar || 'Sin lugar asignado';
+  const asistentes = evento.asistentes !== undefined && evento.asistentes !== '' ? evento.asistentes : 'Sin definir';
 
   return (
     <div className="read-mode-container">

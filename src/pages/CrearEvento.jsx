@@ -32,15 +32,11 @@ export default function CrearEvento() {
   const [tipo, setTipo] = useState('Boda');
   const [fecha, setFecha] = useState('');
   const [lugar, setLugar] = useState('');
-  const [asistentes, setAsistentes] = useState('280');
+  const [asistentes, setAsistentes] = useState('');
   const [descripcion, setDescripcion] = useState('');
 
-  // Subtareas iniciales
-  const [subtareasPlan, setSubtareasPlan] = useState([
-    { id: 'p1', titulo: 'Reservar salón de eventos principal', horasEstimadas: 3, fechaLimite: 'Mañana', responsable: 'Coordinador' },
-    { id: 'p2', titulo: 'Confirmar catering y opciones de alimentación', horasEstimadas: 2, fechaLimite: 'Hoy', responsable: 'Catering' },
-    { id: 'p3', titulo: 'Contratar fotógrafo y cobertura audiovisual', horasEstimadas: 4, fechaLimite: 'Próxima semana', responsable: 'Fotógrafo' },
-  ]);
+  // Subtareas iniciales (comienza vacío para que el usuario agregue las suyas)
+  const [subtareasPlan, setSubtareasPlan] = useState([]);
 
   const [nuevaSubtarea, setNuevaSubtarea] = useState('');
   const [nuevasHoras, setNuevasHoras] = useState(2);
@@ -339,25 +335,34 @@ export default function CrearEvento() {
             </div>
 
             <div className="plan-tasks-preview-list">
-              {subtareasPlan.map((sub, idx) => (
-                <div key={sub.id} className="plan-task-pill-card">
-                  <span className="plan-task-num">#{idx + 1}</span>
-                  <div className="plan-task-details">
-                    <strong>{sub.titulo}</strong>
-                    <span className="plan-task-meta">
-                      ⏱️ {sub.horasEstimadas}h • 👤 {sub.responsable} • Vence: {sub.fechaLimite}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-remove-subtask"
-                    onClick={() => quitarSubtarea(sub.id)}
-                    title="Quitar gestión"
-                  >
-                    ×
-                  </button>
+              {subtareasPlan.length === 0 ? (
+                <div className="plan-tasks-empty-notice">
+                  <span className="empty-tasks-icon" aria-hidden="true">📋</span>
+                  <p>
+                    No hay gestiones logísticas agregadas aún. Puedes ingresar tus gestiones en el formulario de abajo o crearlas más adelante.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                subtareasPlan.map((sub, idx) => (
+                  <div key={sub.id} className="plan-task-pill-card">
+                    <span className="plan-task-num">#{idx + 1}</span>
+                    <div className="plan-task-details">
+                      <strong>{sub.titulo}</strong>
+                      <span className="plan-task-meta">
+                        ⏱️ {sub.horasEstimadas}h • 👤 {sub.responsable} • Vence: {sub.fechaLimite}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-remove-subtask"
+                      onClick={() => quitarSubtarea(sub.id)}
+                      title="Quitar gestión"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Agregar subtarea adicional */}
