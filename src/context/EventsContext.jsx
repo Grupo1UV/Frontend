@@ -164,30 +164,42 @@ export function EventsProvider({ children }) {
         const { data: dbSubtasks, error: errSub } = await supabase.from('subtasks').select('*');
 
         if (!errEvt && dbEvents && dbEvents.length > 0) {
-          const eventosCompletos = dbEvents.map((evt) => {
-            const subs = (dbSubtasks || [])
-              .filter((s) => s.event_id === evt.id)
-              .map((s) => ({
-                id: s.id,
-                titulo: s.titulo,
-                horasEstimadas: s.horas_estimadas,
-                fechaLimite: s.fecha_limite,
-                estado: s.estado,
-                responsable: s.responsable,
-                isCatering: s.is_catering,
-                isCritical: s.is_critical,
-              }));
-            return {
-              id: evt.id,
-              nombre: evt.nombre,
-              tipo: evt.tipo,
-              fecha: evt.fecha,
-              descripcion: evt.descripcion || '',
-              hasCriticalError: evt.has_critical_error,
-              subtareas: subs,
-            };
+          setEventos((prev) => {
+            const prevMap = new Map(prev.map((e) => [e.id, e]));
+
+            return dbEvents.map((evt) => {
+              const existing = prevMap.get(evt.id) || {};
+              const subs = (dbSubtasks || [])
+                .filter((s) => s.event_id === evt.id)
+                .map((s) => ({
+                  id: s.id,
+                  titulo: s.titulo,
+                  horasEstimadas: s.horas_estimadas,
+                  fechaLimite: s.fecha_limite,
+                  estado: s.estado,
+                  responsable: s.responsable,
+                  isCatering: s.is_catering,
+                  isCritical: s.is_critical,
+                }));
+
+              return {
+                id: evt.id,
+                nombre: evt.nombre,
+                tipo: evt.tipo,
+                fecha: evt.fecha,
+                // Preservar lugar y asistentes si existen en Supabase o en el estado local previo
+                lugar: evt.lugar !== undefined && evt.lugar !== null && evt.lugar !== ''
+                  ? evt.lugar
+                  : (existing.lugar || ''),
+                asistentes: evt.asistentes !== undefined && evt.asistentes !== null && evt.asistentes !== ''
+                  ? evt.asistentes
+                  : (existing.asistentes !== undefined && existing.asistentes !== '' ? existing.asistentes : ''),
+                descripcion: evt.descripcion || '',
+                hasCriticalError: evt.has_critical_error,
+                subtareas: subs.length > 0 ? subs : (existing.subtareas || []),
+              };
+            });
           });
-          setEventos(eventosCompletos);
         }
       } catch (err) {
         console.warn('Aviso: modo offline/fallback para Supabase:', err);
@@ -259,14 +271,29 @@ export function EventsProvider({ children }) {
     // Persistencia asíncrona en Supabase (US-47)
     (async () => {
       try {
-        await supabase.from('events').insert({
+        const payloadConColumnas = {
           id: eventoCompleto.id,
           nombre: eventoCompleto.nombre,
           tipo: eventoCompleto.tipo,
           fecha: eventoCompleto.fecha,
+          lugar: eventoCompleto.lugar,
+          asistentes: Number(eventoCompleto.asistentes) || 0,
           descripcion: eventoCompleto.descripcion,
           has_critical_error: eventoCompleto.hasCriticalError,
-        });
+        };
+
+        const { error } = await supabase.from('events').insert(payloadConColumnas);
+        if (error) {
+          // Si las columnas nuevas aún no existen en la BD, insertar con los campos base
+          await supabase.from('events').insert({
+            id: eventoCompleto.id,
+            nombre: eventoCompleto.nombre,
+            tipo: eventoCompleto.tipo,
+            fecha: eventoCompleto.fecha,
+            descripcion: eventoCompleto.descripcion,
+            has_critical_error: eventoCompleto.hasCriticalError,
+          });
+        }
 
         if (eventoCompleto.subtareas && eventoCompleto.subtareas.length > 0) {
           const subsToInsert = eventoCompleto.subtareas.map((s) => ({
@@ -295,7 +322,43 @@ export function EventsProvider({ children }) {
     setEventos((prev) =>
       prev.map((evt) => (evt.id === id ? { ...evt, ...datosActualizados } : evt))
     );
-    supabase.from('events').update(datosActualizados).eq('id', id).then(() => {});
+
+    // Separar subtareas de los campos de la tabla events para no generar error PGRST204
+    const { subtareas, ...camposEvento } = datosActualizados;
+
+    (async () => {
+      try {
+        // Intentar actualizar en Supabase
+        const { error } = await supabase.from('events').update(camposEvento).eq('id', id);
+        if (error) {
+          // Si falló por columnas no creadas, actualizar los campos base
+          const safePayload = {
+            nombre: camposEvento.nombre,
+            tipo: camposEvento.tipo,
+            fecha: camposEvento.fecha,
+            descripcion: camposEvento.descripcion,
+          };
+          await supabase.from('events').update(safePayload).eq('id', id);
+        }
+
+        // Si hay subtareas, sincronizarlas en la tabla subtasks
+        if (Array.isArray(subtareas)) {
+          for (const sub of subtareas) {
+            await supabase.from('subtasks').upsert({
+              id: sub.id,
+              event_id: id,
+              titulo: sub.titulo,
+              horas_estimadas: Number(sub.horasEstimadas) || 1,
+              fecha_limite: sub.fechaLimite || '',
+              estado: sub.estado || 'Pendiente',
+              responsable: sub.responsable || '',
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Error actualizando evento en Supabase:', err);
+      }
+    })();
   };
 
   // Eliminar un evento (Decisión 4)
