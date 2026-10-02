@@ -67,8 +67,8 @@ export default function CrearEvento() {
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(value)) {
           error = 'Ingresa una fecha válida (AAAA-MM-DD).';
-        } else if (value <= todayStr) {
-          error = 'La fecha del evento debe ser posterior a la fecha actual.';
+        } else if (value < todayStr) {
+          error = 'La fecha del evento no puede ser anterior a hoy.';
         }
       }
     } else if (field === 'lugar') {
@@ -248,6 +248,7 @@ export default function CrearEvento() {
                 <input
                   id="evt-fecha"
                   type="date"
+                  min={todayStr}
                   className={`input-focus-active ${errors.fecha ? 'input-error-border' : ''}`}
                   value={fecha}
                   onChange={(e) => handleChange('fecha', e.target.value, setFecha)}
