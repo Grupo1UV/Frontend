@@ -28,26 +28,36 @@ function ProtectedRoute({ children }) {
 function MainAppLayout() {
   const { currentUser } = useEvents();
   const location = useLocation();
-  const isLoginPage = location.pathname === '/login';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/registro';
 
   return (
-    <div className={`app-layout ${isLoginPage ? 'layout-auth' : ''}`}>
+    <div className={`app-layout ${isAuthPage ? 'layout-auth' : ''}`}>
       {/* La barra de navegación superior solo se muestra tras autenticarse */}
-      {currentUser && currentUser.isLoggedIn && !isLoginPage && <Navbar />}
+      {currentUser && currentUser.isLoggedIn && !isAuthPage && <Navbar />}
 
       <main
-        className={`main-content-area ${isLoginPage ? 'main-content-auth' : ''}`}
+        className={`main-content-area ${isAuthPage ? 'main-content-auth' : ''}`}
         id="main-content"
       >
         <Routes>
-          {/* Ruta pública principal: Iniciar Sesión (primera pantalla obligatoria) */}
+          {/* Rutas públicas: Iniciar Sesión y Registro */}
           <Route
             path="/login"
             element={
               currentUser && currentUser.isLoggedIn ? (
                 <Navigate to="/" replace />
               ) : (
-                <Login />
+                <Login initialMode="login" />
+              )
+            }
+          />
+          <Route
+            path="/registro"
+            element={
+              currentUser && currentUser.isLoggedIn ? (
+                <Navigate to="/" replace />
+              ) : (
+                <Login initialMode="register" />
               )
             }
           />
@@ -117,7 +127,7 @@ function MainAppLayout() {
       </main>
 
       {/* Footer corporativo Eventify solo en el interior de la plataforma */}
-      {currentUser && currentUser.isLoggedIn && !isLoginPage && (
+      {currentUser && currentUser.isLoggedIn && !isAuthPage && (
         <footer className="main-footer">
           <div className="footer-content">
             <p>

@@ -3020,6 +3020,44 @@ a {
   text-decoration: underline;
 }
 
+.btn-as-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline;
+}
+
+.login-form-subtitle {
+  font-size: 0.92rem;
+  color: #64748B;
+  text-align: center;
+  margin: -18px 0 22px;
+  line-height: 1.4;
+}
+
+.login-inline-success {
+  background-color: #F0FDF4;
+  border: 1px solid #86EFAC;
+  color: #15803D;
+  font-size: 0.86rem;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.btn-register-submit {
+  margin-top: 10px;
+}
+
 /* Lado Derecho: Banner Visual Eventify */
 .login-banner-side {
   background: linear-gradient(145deg, #1E6FFB 0%, #1555DF 100%);
