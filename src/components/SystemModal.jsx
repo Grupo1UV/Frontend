@@ -93,6 +93,31 @@ export default function SystemModal({
       btnConfirmVariant = 'danger';
       break;
 
+    // Sprint 3: Módulo 4 - Modales de Notificación Explicit
+    case 'reprogramar_exito':
+      modalTitle = title || 'Reprogramar';
+      modalText = message || 'La fecha de la subtarea se actualizó correctamente.';
+      modalCategory = 'success';
+      btnConfirmText = confirmText || 'Aceptar';
+      btnConfirmVariant = 'primary';
+      break;
+
+    case 'horas_reducidas_exito':
+      modalTitle = title || 'Horas reducidas';
+      modalText = message || 'La fecha y las horas de la subtarea se actualizaron correctamente.';
+      modalCategory = 'success';
+      btnConfirmText = confirmText || 'Aceptar';
+      btnConfirmVariant = 'primary';
+      break;
+
+    case 'error_actualizar':
+      modalTitle = title || 'Error al actualizar';
+      modalText = message || 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.';
+      modalCategory = 'error';
+      btnConfirmText = confirmText || 'Aceptar';
+      btnConfirmVariant = 'danger';
+      break;
+
     default:
       modalCategory = modalCategory || 'risk';
       btnConfirmText = confirmText || (modalCategory === 'risk' ? 'Eliminar' : 'Aceptar');

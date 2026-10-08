@@ -76,6 +76,23 @@ export const api = {
       headers: getAuthHeaders(),
     });
   },
+
+  // Métodos especializados Sprint 3
+  async getCapacity() {
+    return this.get('/users/capacity');
+  },
+
+  async updateCapacity(limitHoursDay) {
+    return this.put('/users/capacity', { limitHoursDay });
+  },
+
+  async updateSubtask(subtaskId, payload) {
+    return this.patch(`/subtasks/${subtaskId}`, payload);
+  },
+
+  async getSubtasksToday(params = '') {
+    return this.get(`/subtasks/today${params ? `?${params}` : ''}`);
+  },
 };
 
 export default api;

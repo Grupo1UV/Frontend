@@ -17,33 +17,40 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
   const [valorInput, setValorInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
-      setValorInput(limiteDiario ? String(limiteDiario) : '');
-      setErrorMsg('');
-      setSuccessMsg('');
-      const timer = setTimeout(() => {
-        if (inputRef.current) inputRef.current.focus();
-      }, 50);
-      return () => clearTimeout(timer);
+      try {
+        setValorInput(limiteDiario ? String(limiteDiario) : '');
+        setErrorMsg('');
+        setSuccessMsg('');
+        setIsSaving(false);
+        const timer = setTimeout(() => {
+          if (inputRef.current) inputRef.current.focus();
+        }, 50);
+        return () => clearTimeout(timer);
+      } catch (err) {
+        console.error('Error al inicializar límite actual:', err);
+        setErrorMsg('No se pudo cargar el límite actual');
+      }
     }
   }, [isOpen, limiteDiario]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape' && isOpen && !isSaving) {
         onClose?.();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, isSaving, onClose]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
@@ -59,14 +66,22 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
       return;
     }
 
-    const res = cambiarLimiteDiario(n);
-    if (res.ok) {
-      setSuccessMsg('Se cambió exitosamente el límite diario');
-      setTimeout(() => {
-        onClose?.();
-      }, 900);
-    } else {
-      setErrorMsg(res.error || 'El valor debe estar entre 1 y 16 horas');
+    setIsSaving(true);
+    try {
+      const res = await cambiarLimiteDiario(n);
+      if (res.ok) {
+        setSuccessMsg('Se cambió exitosamente el límite diario');
+        setTimeout(() => {
+          setIsSaving(false);
+          onClose?.();
+        }, 800);
+      } else {
+        setIsSaving(false);
+        setErrorMsg(res.error || 'El valor debe estar entre 1 y 16 horas');
+      }
+    } catch {
+      setIsSaving(false);
+      setErrorMsg('No se pudo cargar el límite actual');
     }
   };
 
@@ -87,7 +102,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
               Configuración de Capacidad Diaria
             </h3>
             <p className="system-modal-desc" style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '2px' }}>
-              Define tu margen máximo de horas planificadas por jornada (h/día).
+              Define tu margen máximo de horas trabajables por jornada (h/día).
             </p>
           </div>
         </div>
@@ -107,7 +122,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
         <form onSubmit={handleSubmit} className="limit-config-form">
           <div className="form-field">
             <label htmlFor="input-limite-horas" className="form-label">
-              Límite diario de horas (h/día) <span className="required-star">*</span>
+              Límite diario <span className="required-star">*</span>
             </label>
             <div className="inline-limit-input-group">
               <input
@@ -120,6 +135,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
                 onKeyDown={bloquearTeclasNoNumericas}
                 placeholder="6 horas (por defecto)"
                 value={valorInput}
+                disabled={isSaving}
                 onChange={(e) => {
                   setValorInput(e.target.value);
                   if (errorMsg) setErrorMsg('');
@@ -130,7 +146,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
               <span className="unit-suffix">h/día</span>
             </div>
             <p className="field-hint-text" style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '4px' }}>
-              Rango operativo permitido: de 1 a 16 horas diarias.
+              Rango operativo permitido: estrictamente de 1 a 16 horas diarias.
             </p>
           </div>
 
@@ -138,6 +154,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
             <Button
               variant="neutral"
               type="button"
+              disabled={isSaving}
               onClick={onClose}
             >
               Cancelar
@@ -145,8 +162,9 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
             <Button
               variant="primary"
               type="submit"
+              disabled={isSaving}
             >
-              Guardar límite
+              {isSaving ? 'Guardando...' : 'Guardar'}
             </Button>
           </div>
         </form>

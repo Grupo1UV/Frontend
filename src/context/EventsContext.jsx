@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { normalizarJornada } from '../utils/validacionesHoras';
+import api from '../services/api';
 
 const EventsContext = createContext(null);
 
@@ -163,6 +164,8 @@ export function EventsProvider({ children }) {
   const [hasCateringModuleError, setHasCateringModuleError] = useState(false);
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [isLoadingCatering, setIsLoadingCatering] = useState(false);
+  // Sprint 3: Módulo 4 - Estado Cargando (Loading State) para planificación
+  const [isLoadingPlanning, setIsLoadingPlanning] = useState(true);
 
   // Límite diario de capacidad en horas (Sprint 3: 6 horas por defecto, rango 1-16)
   const [limiteDiario, setLimiteDiario] = useState(() => {
@@ -180,7 +183,7 @@ export function EventsProvider({ children }) {
     return 6; // 6 horas por defecto
   });
 
-  const cambiarLimiteDiario = (nuevoValor) => {
+  const cambiarLimiteDiario = async (nuevoValor) => {
     const val = Number(nuevoValor);
     if (!Number.isFinite(val) || val < 1 || val > 16) {
       return { ok: false, error: 'El valor debe estar entre 1 y 16 horas' };
@@ -189,6 +192,7 @@ export function EventsProvider({ children }) {
     setLimiteDiario(sanitized);
     try {
       localStorage.setItem('eventify_limite_diario', String(sanitized));
+      api.updateCapacity(sanitized).catch(() => {});
     } catch (e) {
       console.warn('Error guardando límite diario en localStorage', e);
     }
@@ -210,9 +214,11 @@ export function EventsProvider({ children }) {
   useEffect(() => {
     if (!currentUser) {
       setEventos([]);
+      setIsLoadingPlanning(false);
       return;
     }
 
+    setIsLoadingPlanning(true);
     const key = getUserStorageKey(currentUser);
     const local = localStorage.getItem(key);
     if (local) {
@@ -226,6 +232,11 @@ export function EventsProvider({ children }) {
     } else {
       setEventos([]);
     }
+
+    // Ocultar spinner tras inicialización
+    const loadTimer = setTimeout(() => {
+      setIsLoadingPlanning(false);
+    }, 350);
 
     async function cargarDesdeSupabase() {
       try {
@@ -490,7 +501,7 @@ export function EventsProvider({ children }) {
   };
 
   // Reprogramar subtarea (Sprint 3: Actualiza fecha y estado automáticamente a 'POSTERGADA')
-  const reprogramarSubtarea = (eventoId, subtareaId, nuevaFecha, nuevasHoras = null) => {
+  const reprogramarSubtarea = async (eventoId, subtareaId, nuevaFecha, nuevasHoras = null) => {
     setEventos((prev) =>
       prev.map((evt) => {
         if (evt.id !== eventoId) return evt;
@@ -517,11 +528,20 @@ export function EventsProvider({ children }) {
     if (nuevasHoras !== null && nuevasHoras !== undefined) {
       payload.horas_estimadas = Number(nuevasHoras);
     }
-    supabase.from('subtasks').update(payload).eq('id', subtareaId).then(() => {});
+    try {
+      supabase.from('subtasks').update(payload).eq('id', subtareaId).then(() => {});
+      await api.updateSubtask(subtareaId, {
+        fechaLimite: nuevaFecha,
+        horasEstimadas: nuevasHoras !== null && nuevasHoras !== undefined ? Number(nuevasHoras) : undefined,
+        estado: 'POSTERGADA',
+      }).catch(() => {});
+    } catch (e) {
+      // offline fallback
+    }
   };
 
   // Actualizar horas de subtarea (Sprint 3: Modal Reducir Horas)
-  const actualizarHorasSubtarea = (eventoId, subtareaId, nuevasHoras) => {
+  const actualizarHorasSubtarea = async (eventoId, subtareaId, nuevasHoras) => {
     const horasNum = Number(nuevasHoras);
     setEventos((prev) =>
       prev.map((evt) => {
@@ -536,7 +556,12 @@ export function EventsProvider({ children }) {
         };
       })
     );
-    supabase.from('subtasks').update({ horas_estimadas: horasNum }).eq('id', subtareaId).then(() => {});
+    try {
+      supabase.from('subtasks').update({ horas_estimadas: horasNum }).eq('id', subtareaId).then(() => {});
+      await api.updateSubtask(subtareaId, { horasEstimadas: horasNum }).catch(() => {});
+    } catch (e) {
+      // offline fallback
+    }
   };
 
   // Helper para sumar horas asignadas a una jornada específica (con opción de excluir una subtarea)
@@ -658,6 +683,8 @@ export function EventsProvider({ children }) {
         reprogramarSubtarea,
         actualizarHorasSubtarea,
         obtenerHorasAsignadasAFecha,
+        isLoadingPlanning,
+        setIsLoadingPlanning,
         // Helpers para evaluación
         restaurarDatosIniciales,
         vaciarEventos,

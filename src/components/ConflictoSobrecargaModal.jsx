@@ -49,6 +49,7 @@ export default function ConflictoSobrecargaModal({
   const [nuevasHorasInput, setNuevasHorasInput] = useState('');
   const [errorReducir, setErrorReducir] = useState('');
   const [successReducir, setSuccessReducir] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Subtarea seleccionada para resolver
   const [subtareaSeleccionadaId, setSubtareaSeleccionadaId] = useState('');
@@ -62,6 +63,7 @@ export default function ConflictoSobrecargaModal({
       setErrorMover('');
       setErrorReducir('');
       setSuccessReducir('');
+      setIsSaving(false);
 
       if (conflictoData?.subtareaAfectada?.id) {
         setSubtareaSeleccionadaId(conflictoData.subtareaAfectada.id);
@@ -110,6 +112,7 @@ export default function ConflictoSobrecargaModal({
     }
 
     if (onResolverMover) {
+      setIsSaving(true);
       onResolverMover(subtareaActiva, nuevaFecha, iso);
     }
   };
@@ -141,6 +144,7 @@ export default function ConflictoSobrecargaModal({
       return;
     }
 
+    setIsSaving(true);
     setSuccessReducir('Las horas de la subtarea se actualizaron correctamente');
 
     setTimeout(() => {
@@ -175,9 +179,9 @@ export default function ConflictoSobrecargaModal({
                 <h3 id="conflicto-modal-title" className="system-modal-title" style={{ color: '#DC2626' }}>
                   Conflicto de sobrecarga
                 </h3>
-                {/* Subtítulo dinámico reglamentario */}
+                {/* Subtítulo dinámico reglamentario con cifras numéricas exactas */}
                 <p className="system-modal-subtitle" style={{ fontSize: '0.95rem', fontWeight: 600, color: '#334155', marginTop: '3px' }}>
-                  Quedarías con {horasTotales}h planificadas (tu límite es {limiteDiario}h)
+                  Quedarías con {horasTotales}h planificadas (límite {limiteDiario}h)
                 </p>
               </div>
             </div>
@@ -324,6 +328,7 @@ export default function ConflictoSobrecargaModal({
                 variant="neutral"
                 type="button"
                 onClick={() => setModo('menu')}
+                disabled={isSaving}
               >
                 Volver
               </Button>
@@ -331,8 +336,9 @@ export default function ConflictoSobrecargaModal({
                 variant="primary"
                 type="button"
                 onClick={handleConfirmarMover}
+                disabled={isSaving}
               >
-                Confirmar nueva fecha
+                {isSaving ? 'Guardando...' : 'Confirmar'}
               </Button>
             </div>
           </>
@@ -385,11 +391,11 @@ export default function ConflictoSobrecargaModal({
                   <strong style={{ fontSize: '1.1rem', color: '#DC2626' }}>{horasSubtarea}h</strong>
                 </div>
 
-                {/* 3. Indicador de disponibilidad del día (ej. "5h planificadas de 6h") */}
+                {/* 3. Indicador de disponibilidad del día (ej. "5h de 6h") */}
                 <div style={{ flex: 1.4, padding: '10px', backgroundColor: '#EFF6FF', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
                   <span style={{ fontSize: '0.75rem', color: '#1E40AF', display: 'block' }}>Disponibilidad de la jornada:</span>
                   <strong style={{ fontSize: '1rem', color: '#1D4ED8' }}>
-                    {horasOtras}h planificadas de {limiteDiario}h
+                    {horasOtras}h de {limiteDiario}h
                   </strong>
                   <span style={{ fontSize: '0.75rem', color: '#2563EB', display: 'block', marginTop: '2px' }}>
                     Margen disponible: <strong>{margenDisponible}h</strong>
@@ -412,6 +418,7 @@ export default function ConflictoSobrecargaModal({
                     onKeyDown={bloquearTeclasNoNumericas}
                     placeholder={`Máx ${margenDisponible}h`}
                     value={nuevasHorasInput}
+                    disabled={isSaving || Boolean(successReducir)}
                     onChange={(e) => {
                       setNuevasHorasInput(e.target.value);
                       if (errorReducir) setErrorReducir('');
@@ -429,16 +436,16 @@ export default function ConflictoSobrecargaModal({
                 variant="neutral"
                 type="button"
                 onClick={() => setModo('menu')}
-                disabled={Boolean(successReducir)}
+                disabled={isSaving || Boolean(successReducir)}
               >
                 Volver
               </Button>
               <Button
                 variant="primary"
                 type="submit"
-                disabled={Boolean(successReducir)}
+                disabled={isSaving || Boolean(successReducir)}
               >
-                Guardar nuevas horas
+                {isSaving ? 'Guardando...' : 'Guardar'}
               </Button>
             </div>
           </form>

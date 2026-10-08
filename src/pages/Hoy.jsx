@@ -31,6 +31,7 @@ export default function Hoy() {
     hasCateringModuleError,
     isLoadingGlobal,
     isLoadingCatering,
+    isLoadingPlanning,
     reintentarGlobal,
     recargarModuloCatering,
   } = useEvents();
@@ -54,6 +55,13 @@ export default function Hoy() {
   const [conflictoState, setConflictoState] = useState({
     isOpen: false,
     conflictoData: null,
+  });
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [notificacionModal, setNotificacionModal] = useState({
+    isOpen: false,
+    type: '',
+    title: '',
+    message: '',
   });
   const [toastMessage, setToastMessage] = useState('');
 
@@ -224,7 +232,7 @@ export default function Hoy() {
   };
 
   // Sprint 3: Confirmar reprogramación con validación de sobrecarga
-  const handleConfirmarReprogramar = () => {
+  const handleConfirmarReprogramar = async () => {
     const { task, nuevaFecha } = reprogramarState;
     if (!task) return;
     if (!nuevaFecha) {
@@ -263,15 +271,31 @@ export default function Hoy() {
     }
 
     // Sin conflicto: guardar y actualizar automáticamente a POSTERGADA
-    const displayFecha = isoToDisplayDate(iso);
-    reprogramarSubtarea(task.eventoId, task.id, displayFecha);
-    setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
-    setToastMessage(`Gestión reprogramada exitosamente para el ${displayFecha}`);
-    setTimeout(() => setToastMessage(''), 3500);
+    try {
+      setIsSavingTask(true);
+      const displayFecha = isoToDisplayDate(iso);
+      await reprogramarSubtarea(task.eventoId, task.id, displayFecha);
+      setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+      setNotificacionModal({
+        isOpen: true,
+        type: 'reprogramar_exito',
+        title: 'Reprogramar',
+        message: 'La fecha de la subtarea se actualizó correctamente.',
+      });
+    } catch (err) {
+      setNotificacionModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        title: 'Error al actualizar',
+        message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
+      });
+    } finally {
+      setIsSavingTask(false);
+    }
   };
 
   // Sprint 3: Resolución Conflicto Opción 1 - Mover a otro día
-  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay, nuevaFechaIso) => {
+  const handleResolverConflictoMover = async (subtask, nuevaFechaDisplay, nuevaFechaIso) => {
     const horasExistentes = obtenerHorasAsignadasAFecha(nuevaFechaIso, subtask.id);
     const horasTarea = Number(subtask.horasEstimadas) || 0;
     const totalConTarea = Math.round((horasExistentes + horasTarea) * 10) / 10;
@@ -292,22 +316,48 @@ export default function Hoy() {
       return;
     }
 
-    reprogramarSubtarea(subtask.eventoId, subtask.id, nuevaFechaDisplay);
-    setConflictoState({ isOpen: false, conflictoData: null });
-    setToastMessage(`Gestión reprogramada exitosamente para el ${nuevaFechaDisplay}`);
-    setTimeout(() => setToastMessage(''), 3500);
+    try {
+      await reprogramarSubtarea(subtask.eventoId, subtask.id, nuevaFechaDisplay);
+      setConflictoState({ isOpen: false, conflictoData: null });
+      setNotificacionModal({
+        isOpen: true,
+        type: 'reprogramar_exito',
+        title: 'Reprogramar',
+        message: 'La fecha de la subtarea se actualizó correctamente.',
+      });
+    } catch (err) {
+      setNotificacionModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        title: 'Error al actualizar',
+        message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
+      });
+    }
   };
 
   // Sprint 3: Resolución Conflicto Opción 2 - Reducir horas estimadas
-  const handleResolverConflictoReducir = (subtask, nuevasHoras) => {
-    actualizarHorasSubtarea(subtask.eventoId, subtask.id, nuevasHoras);
-    if (conflictoState.conflictoData?.fecha) {
-      const fechaDisp = conflictoState.conflictoData.fechaDisplay || isoToDisplayDate(conflictoState.conflictoData.fecha);
-      reprogramarSubtarea(subtask.eventoId, subtask.id, fechaDisp, nuevasHoras);
+  const handleResolverConflictoReducir = async (subtask, nuevasHoras) => {
+    try {
+      await actualizarHorasSubtarea(subtask.eventoId, subtask.id, nuevasHoras);
+      if (conflictoState.conflictoData?.fecha) {
+        const fechaDisp = conflictoState.conflictoData.fechaDisplay || isoToDisplayDate(conflictoState.conflictoData.fecha);
+        await reprogramarSubtarea(subtask.eventoId, subtask.id, fechaDisp, nuevasHoras);
+      }
+      setConflictoState({ isOpen: false, conflictoData: null });
+      setNotificacionModal({
+        isOpen: true,
+        type: 'horas_reducidas_exito',
+        title: 'Horas reducidas',
+        message: 'La fecha y las horas de la subtarea se actualizaron correctamente.',
+      });
+    } catch (err) {
+      setNotificacionModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        title: 'Error al actualizar',
+        message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
+      });
     }
-    setConflictoState({ isOpen: false, conflictoData: null });
-    setToastMessage('Las horas de la subtarea se actualizaron correctamente');
-    setTimeout(() => setToastMessage(''), 3500);
   };
 
   // Error Global Crítico
@@ -324,8 +374,20 @@ export default function Hoy() {
     );
   }
 
-  // Estado Vacío (Empty State)
-  if (isEmpty) {
+  // Estado de Carga (Sprint 3: Calidad IxD)
+  if (isLoadingPlanning) {
+    return (
+      <div className="page-wrapper page-loading-view" style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="planning-loading-wrapper">
+          <div className="planning-spinner" aria-hidden="true" />
+          <p className="planning-loading-text">Cargando tu planificación...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Estado Vacío (Empty State - Sprint 3)
+  if (isEmpty || todasLasTareas.length === 0) {
     return (
       <div className="page-wrapper">
         <header className="page-header-row">
@@ -337,11 +399,11 @@ export default function Hoy() {
         </header>
 
         <EmptyState
-          isEmpty={isEmpty}
-          title="¿Deseas organizar tu primer evento?"
-          description="Actualmente no cuentas con ningún evento registrado en tu panel. Crea tu primer proyecto para que el sistema genere automáticamente tu plan inicial de tareas logísticas."
-          buttonText="Crear evento"
-          to="/crear-evento"
+          isEmpty={true}
+          title="No hay tareas programadas."
+          subtitle="Actualmente no cuentas con ninguna tarea programada en tu panel. Crea tu primer evento para comenzar a planificar."
+          actionText="Crear evento"
+          actionTo="/crear-evento"
         />
       </div>
     );
@@ -511,158 +573,175 @@ export default function Hoy() {
         )}
       </section>
 
-      {/* Módulo Parcial de Catering (Decisión 3: Error Localizado) */}
-      <section className="dashboard-section catering-module-wrapper">
-        <div className="section-title-line">
-          <div>
-            <h3 className="section-title">
-              {hasCateringModuleError
-                ? 'Error cargando las gestiones urgentes de catering'
-                : 'Gestiones Urgentes de Catering'}
-            </h3>
-            <p className="section-desc">Coordinación directa con proveedores de alimentación y banquetes.</p>
-          </div>
+      {/* Resumen o Estado Vacío de Filtros (Sprint 3) */}
+      {hayFiltrosActivos && tareasFiltradas.length === 0 ? (
+        <div className="empty-filter-state-box">
+          <span className="empty-filter-icon" aria-hidden="true">🔍</span>
+          <p className="empty-filter-text">No hay tareas que coincidan con los filtros aplicados.</p>
+          <button
+            type="button"
+            className="btn-clear-filters"
+            onClick={limpiarFiltros}
+          >
+            ✕ Restablecer filtros
+          </button>
         </div>
+      ) : (
+        <>
+          {/* Módulo Parcial de Catering (Decisión 3: Error Localizado) */}
+          <section className="dashboard-section catering-module-wrapper">
+            <div className="section-title-line">
+              <div>
+                <h3 className="section-title">
+                  {hasCateringModuleError
+                    ? 'Error cargando las gestiones urgentes de catering'
+                    : 'Gestiones Urgentes de Catering'}
+                </h3>
+                <p className="section-desc">Coordinación directa con proveedores de alimentación y banquetes.</p>
+              </div>
+            </div>
 
-        {hasCateringModuleError ? (
-          <ErrorMessage
-            hasError={hasCateringModuleError}
-            isGlobal={false}
-            title="Error cargando las gestiones urgentes de catering"
-            message="No se ha podido cargar el evento o sus gestiones asociadas. Las demás áreas continúan operativas."
-            onRetry={recargarModuloCatering}
-          />
-        ) : (
-          <div className="catering-tasks-list">
-            {tareasCatering.length > 0 ? (
-              tareasCatering.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onComplete={marcarSubtareaHecha}
-                  onSnooze={posponerSubtarea}
-                  onReprogram={handleAbrirReprogramar}
-                  onDeleteRequest={handleRequestDeleteTask}
-                />
-              ))
+            {hasCateringModuleError ? (
+              <ErrorMessage
+                hasError={hasCateringModuleError}
+                isGlobal={false}
+                title="Error cargando las gestiones urgentes de catering"
+                message="No se ha podido cargar el evento o sus gestiones asociadas. Las demás áreas continúan operativas."
+                onRetry={recargarModuloCatering}
+              />
             ) : (
-              <EmptyState
-                isEmpty={tareasCatering.length === 0}
-                title="¿Deseas agregar tu primera gestión logística?"
-                description="No hay gestiones urgentes de catering pendientes en este momento."
-                buttonText="Agregar gestión"
-                to="/crear-evento"
-                scope="tareas"
-              />
+              <div className="catering-tasks-list">
+                {tareasCatering.length > 0 ? (
+                  tareasCatering.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onComplete={marcarSubtareaHecha}
+                      onSnooze={posponerSubtarea}
+                      onReprogram={handleAbrirReprogramar}
+                      onDeleteRequest={handleRequestDeleteTask}
+                    />
+                  ))
+                ) : (
+                  <EmptyState
+                    isEmpty={tareasCatering.length === 0}
+                    title="¿Deseas agregar tu primera gestión logística?"
+                    description="No hay gestiones urgentes de catering pendientes en este momento."
+                    buttonText="Agregar gestión"
+                    to="/crear-evento"
+                    scope="tareas"
+                  />
+                )}
+              </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
 
-      {/* =================================================================== */}
-      {/* 1. SECCIÓN VENCIDAS (Estrictamente anterior al día de hoy)         */}
-      {/* =================================================================== */}
-      <section className="dashboard-section section-temporal-block">
-        <div className="temporal-group-header">
-          <div className="temporal-title-group">
-            <span className="temporal-dot dot-vencidas" aria-hidden="true" />
-            <h3 className="temporal-heading">Vencidas</h3>
-            <span className="temporal-badge badge-vencidas-count">
-              {vencidasOrdenadas.length}
-            </span>
-          </div>
-          <span className="temporal-hint">Requieren atención o reprogramación inmediata</span>
-        </div>
+          {/* =================================================================== */}
+          {/* 1. SECCIÓN VENCIDAS (Estrictamente anterior al día de hoy)         */}
+          {/* =================================================================== */}
+          <section className="dashboard-section section-temporal-block">
+            <div className="temporal-group-header">
+              <div className="temporal-title-group">
+                <span className="temporal-dot dot-vencidas" aria-hidden="true" />
+                <h3 className="temporal-heading">Vencidas</h3>
+                <span className="temporal-badge badge-vencidas-count">
+                  {vencidasOrdenadas.length}
+                </span>
+              </div>
+              <span className="temporal-hint">Requieren atención o reprogramación inmediata</span>
+            </div>
 
-        {vencidasOrdenadas.length === 0 ? (
-          <div className="temporal-empty-hint">
-            <span>✓ No tienes gestiones vencidas. ¡Excelente gestión temporal!</span>
-          </div>
-        ) : (
-          <div className="task-grid">
-            {vencidasOrdenadas.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={marcarSubtareaHecha}
-                onSnooze={posponerSubtarea}
-                onReprogram={handleAbrirReprogramar}
-                onDeleteRequest={handleRequestDeleteTask}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+            {vencidasOrdenadas.length === 0 ? (
+              <div className="temporal-empty-hint">
+                <span>✓ No tienes gestiones vencidas. ¡Excelente gestión temporal!</span>
+              </div>
+            ) : (
+              <div className="task-grid">
+                {vencidasOrdenadas.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={marcarSubtareaHecha}
+                    onSnooze={posponerSubtarea}
+                    onReprogram={handleAbrirReprogramar}
+                    onDeleteRequest={handleRequestDeleteTask}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
 
-      {/* =================================================================== */}
-      {/* 2. SECCIÓN PARA HOY (Fecha de vencimiento corresponde a hoy)        */}
-      {/* =================================================================== */}
-      <section className="dashboard-section section-temporal-block">
-        <div className="temporal-group-header">
-          <div className="temporal-title-group">
-            <span className="temporal-dot dot-hoy" aria-hidden="true" />
-            <h3 className="temporal-heading">Para hoy</h3>
-            <span className="temporal-badge badge-hoy-count">
-              {paraHoyOrdenadas.length}
-            </span>
-          </div>
-          <span className="temporal-hint">Gestiones programadas para ejecutarse en el día en curso</span>
-        </div>
+          {/* =================================================================== */}
+          {/* 2. SECCIÓN PARA HOY (Fecha de vencimiento corresponde a hoy)        */}
+          {/* =================================================================== */}
+          <section className="dashboard-section section-temporal-block">
+            <div className="temporal-group-header">
+              <div className="temporal-title-group">
+                <span className="temporal-dot dot-hoy" aria-hidden="true" />
+                <h3 className="temporal-heading">Para hoy</h3>
+                <span className="temporal-badge badge-hoy-count">
+                  {paraHoyOrdenadas.length}
+                </span>
+              </div>
+              <span className="temporal-hint">Gestiones programadas para ejecutarse en el día en curso</span>
+            </div>
 
-        {paraHoyOrdenadas.length === 0 ? (
-          <div className="temporal-empty-hint">
-            <span>🎉 No tienes tareas pendientes para hoy. Puedes avanzar en tus próximas gestiones.</span>
-          </div>
-        ) : (
-          <div className="task-grid">
-            {paraHoyOrdenadas.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={marcarSubtareaHecha}
-                onSnooze={posponerSubtarea}
-                onReprogram={handleAbrirReprogramar}
-                onDeleteRequest={handleRequestDeleteTask}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+            {paraHoyOrdenadas.length === 0 ? (
+              <div className="temporal-empty-hint">
+                <span>🎉 No tienes tareas pendientes para hoy. Puedes avanzar en tus próximas gestiones.</span>
+              </div>
+            ) : (
+              <div className="task-grid">
+                {paraHoyOrdenadas.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={marcarSubtareaHecha}
+                    onSnooze={posponerSubtarea}
+                    onReprogram={handleAbrirReprogramar}
+                    onDeleteRequest={handleRequestDeleteTask}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
 
-      {/* =================================================================== */}
-      {/* 3. SECCIÓN PRÓXIMAS (Fecha de vencimiento posterior al día de hoy)  */}
-      {/* =================================================================== */}
-      <section className="dashboard-section section-temporal-block">
-        <div className="temporal-group-header">
-          <div className="temporal-title-group">
-            <span className="temporal-dot dot-proximas" aria-hidden="true" />
-            <h3 className="temporal-heading">Próximas</h3>
-            <span className="temporal-badge badge-proximas-count">
-              {proximasOrdenadas.length}
-            </span>
-          </div>
-          <span className="temporal-hint">Planificación logística para los próximos días y semanas</span>
-        </div>
+          {/* =================================================================== */}
+          {/* 3. SECCIÓN PRÓXIMAS (Fecha de vencimiento posterior al día de hoy)  */}
+          {/* =================================================================== */}
+          <section className="dashboard-section section-temporal-block">
+            <div className="temporal-group-header">
+              <div className="temporal-title-group">
+                <span className="temporal-dot dot-proximas" aria-hidden="true" />
+                <h3 className="temporal-heading">Próximas</h3>
+                <span className="temporal-badge badge-proximas-count">
+                  {proximasOrdenadas.length}
+                </span>
+              </div>
+              <span className="temporal-hint">Planificación logística para los próximos días y semanas</span>
+            </div>
 
-        {proximasOrdenadas.length === 0 ? (
-          <div className="temporal-empty-hint">
-            <span>No hay gestiones futuras programadas en este momento.</span>
-          </div>
-        ) : (
-          <div className="task-grid">
-            {proximasOrdenadas.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onComplete={marcarSubtareaHecha}
-                onSnooze={posponerSubtarea}
-                onReprogram={handleAbrirReprogramar}
-                onDeleteRequest={handleRequestDeleteTask}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+            {proximasOrdenadas.length === 0 ? (
+              <div className="temporal-empty-hint">
+                <span>No hay gestiones futuras programadas en este momento.</span>
+              </div>
+            ) : (
+              <div className="task-grid">
+                {proximasOrdenadas.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={marcarSubtareaHecha}
+                    onSnooze={posponerSubtarea}
+                    onReprogram={handleAbrirReprogramar}
+                    onDeleteRequest={handleRequestDeleteTask}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
       {/* Modal del Sistema para Eliminación de Tarea */}
       <SystemModal
@@ -723,6 +802,7 @@ export default function Hoy() {
               <Button
                 variant="neutral"
                 type="button"
+                disabled={isSavingTask}
                 onClick={() => setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' })}
               >
                 Cancelar
@@ -730,9 +810,10 @@ export default function Hoy() {
               <Button
                 variant="primary"
                 type="button"
+                disabled={isSavingTask}
                 onClick={handleConfirmarReprogramar}
               >
-                Confirmar fecha
+                {isSavingTask ? 'Guardando...' : 'Confirmar'}
               </Button>
             </div>
           </div>
@@ -752,6 +833,15 @@ export default function Hoy() {
       <ConfigurarLimiteModal
         isOpen={showConfigLimite}
         onClose={() => setShowConfigLimite(false)}
+      />
+
+      {/* Modal de Notificación Explícita (Sprint 3: Módulo 4) */}
+      <SystemModal
+        isOpen={notificacionModal.isOpen}
+        type={notificacionModal.type}
+        title={notificacionModal.title}
+        message={notificacionModal.message}
+        onClose={() => setNotificacionModal({ isOpen: false, type: '', title: '', message: '' })}
       />
 
       {/* Toast Notificación Flotante */}
