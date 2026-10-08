@@ -286,7 +286,7 @@ export default function Hoy() {
         <div className="filter-toolbar-header">
           <div className="filter-toolbar-title">
             <span className="filter-icon" aria-hidden="true">🔍</span>
-            <strong>Filtros rápidos de tareas (US-05)</strong>
+            <strong>Filtros rápidos de tareas</strong>
             {hayFiltrosActivos && (
               <span className="filter-active-pill">Filtro aplicado</span>
             )}

@@ -49,7 +49,6 @@ export default function EventDetail({
 
       <div className="read-header-card">
         <div className="read-header-top">
-          <span className="badge-read-only">Consulta de Solo Lectura</span>
           <span className="read-event-type">{evento.tipo}</span>
         </div>
 

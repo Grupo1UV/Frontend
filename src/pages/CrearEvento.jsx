@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEvents } from '../context/EventsContext';
 import SystemModal from '../components/SystemModal';
 import Button from '../components/Button';
+import DatePickerField from '../components/DatePickerField';
 import {
   HORAS_MAX_GESTION,
   HORAS_MIN_GESTION,
@@ -15,6 +16,7 @@ import {
   jornadasExcedidas,
   normalizarJornada,
   validarHorasGestion,
+  isoToDisplayDate,
 } from '../utils/validacionesHoras';
 
 /**
@@ -131,21 +133,24 @@ export default function CrearEvento() {
     nuevosErrores.nuevasHoras = validarHorasGestion(nuevasHoras);
 
     // Si no se elige fecha, la gestión vence el día del evento (o hoy si aún no hay fecha)
-    const fechaGestion = nuevaFechaLimite || fecha || todayStr;
-    if (fechaGestion < todayStr) {
+    const fechaElegida = nuevaFechaLimite || (fecha ? isoToDisplayDate(fecha) : isoToDisplayDate(todayStr));
+    const fechaGestionIso = normalizarJornada(fechaElegida);
+    const fechaGestionDisplay = isoToDisplayDate(fechaGestionIso);
+
+    if (fechaGestionIso < todayStr) {
       nuevosErrores.nuevaFechaLimite = 'La fecha límite no puede ser anterior a hoy.';
-    } else if (fecha && fechaGestion > fecha) {
+    } else if (fecha && fechaGestionIso > fecha) {
       nuevosErrores.nuevaFechaLimite = 'La gestión debe vencer antes o el mismo día del evento.';
     }
 
     // Validación dinámica del límite por jornada
     const horasNum = Number(nuevasHoras);
     if (!nuevosErrores.nuevasHoras && !nuevosErrores.nuevaFechaLimite) {
-      const yaAsignadas = cargaPorJornada[normalizarJornada(fechaGestion)] || 0;
+      const yaAsignadas = cargaPorJornada[fechaGestionIso] || 0;
       if (yaAsignadas + horasNum > limiteJornada) {
         const disponibles = Math.max(limiteJornada - yaAsignadas, 0);
         nuevosErrores.nuevasHoras =
-          `Supera el límite de ${limiteJornada} h para el ${fechaGestion} ` +
+          `Supera el límite de ${limiteJornada} h para el ${fechaGestionDisplay} ` +
           `(ya hay ${yaAsignadas} h; disponibles: ${disponibles} h).`;
       }
     }
@@ -161,7 +166,7 @@ export default function CrearEvento() {
         id: `plan-${Date.now()}`,
         titulo: nuevaSubtarea.trim(),
         horasEstimadas: horasNum,
-        fechaLimite: fechaGestion,
+        fechaLimite: fechaGestionDisplay,
         responsable: 'Equipo Logístico',
       },
     ]);
@@ -488,16 +493,21 @@ export default function CrearEvento() {
 
                 <div className="form-field field-date">
                   <label className="form-label-sm" htmlFor="nueva-gestion-fecha">
-                    Fecha límite
+                    Fecha límite / Jornada <span className="required-star" style={{ color: '#DC2626' }}>*</span>
                   </label>
-                  <input
+                  <DatePickerField
                     id="nueva-gestion-fecha"
-                    type="date"
+                    value={nuevaFechaLimite}
+                    onChange={(formatted) => {
+                      setNuevaFechaLimite(formatted);
+                      if (errors.nuevaFechaLimite) {
+                        setErrors((prev) => ({ ...prev, nuevaFechaLimite: '' }));
+                      }
+                    }}
                     min={todayStr}
                     max={fecha || undefined}
-                    className={`input-focus-active ${errors.nuevaFechaLimite ? 'input-error-border' : ''}`}
-                    value={nuevaFechaLimite}
-                    onChange={(e) => setNuevaFechaLimite(e.target.value)}
+                    placeholder="DD/MM/AAAA"
+                    hasError={!!errors.nuevaFechaLimite}
                   />
                   {errors.nuevaFechaLimite && (
                     <span className="inline-error-text" style={{ color: '#DC2626' }}>
@@ -528,9 +538,15 @@ export default function CrearEvento() {
                 </div>
 
                 <div className="add-subtask-btn-wrapper">
-                  <Button variant="primary" onClick={agregarSubtarea}>
-                    + Agregar gestión
-                  </Button>
+                  <button
+                    type="button"
+                    className="btn-add-subtask-compact"
+                    onClick={agregarSubtarea}
+                    title="Añadir nueva gestión logística"
+                    aria-label="Añadir nueva gestión logística"
+                  >
+                    +
+                  </button>
                 </div>
               </div>
             </div>

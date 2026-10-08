@@ -18,9 +18,32 @@ const toIso = (d) => {
 /** Fecha local de hoy en AAAA-MM-DD (evita el desfase UTC de toISOString). */
 export const hoyIso = () => toIso(new Date());
 
+/** Convierte AAAA-MM-DD a DD/MM/AAAA */
+export function isoToDisplayDate(isoStr) {
+  if (!isoStr) return '';
+  const match = String(isoStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+  return isoStr;
+}
+
+/** Convierte DD/MM/AAAA a AAAA-MM-DD */
+export function displayDateToIso(displayStr) {
+  if (!displayStr) return '';
+  const match = String(displayStr).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    const dd = match[1].padStart(2, '0');
+    const mm = match[2].padStart(2, '0');
+    const yyyy = match[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return displayStr;
+}
+
 /**
  * Normaliza la jornada de una gestión para poder sumar horas por día:
- * "Hoy" y la fecha ISO de hoy cuentan como la misma jornada.
+ * "Hoy", formato ISO y formato DD/MM/AAAA cuentan para la misma jornada.
  */
 export function normalizarJornada(fecha) {
   if (!fecha) return 'Sin fecha';
@@ -30,6 +53,11 @@ export function normalizarJornada(fecha) {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     return toIso(d);
+  }
+  // Si viene en formato DD/MM/AAAA convertir a ISO para orden y agrupación uniforme
+  const iso = displayDateToIso(valor);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return iso;
   }
   return valor;
 }

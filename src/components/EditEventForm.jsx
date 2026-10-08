@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Button from './Button';
+import DatePickerField from './DatePickerField';
 import {
   HORAS_MIN_GESTION,
   HORAS_MAX_GESTION,
@@ -178,20 +179,6 @@ export default function EditEventForm({
 
   return (
     <form onSubmit={handleSubmit} className="edit-mode-container" noValidate>
-      <div className="mode-bar-edit">
-        <div className="mode-indicator-content">
-          <span className="mode-pulse-dot" style={{ backgroundColor: '#2563EB' }} />
-          <div>
-            <strong>Editar y Reprogramar Evento</strong>
-            <p>Ajusta los detalles del evento, los límites operativos y la carga de cada gestión.</p>
-          </div>
-        </div>
-
-        <button type="button" className="btn-switch-mode btn-mode-read" onClick={onCancel}>
-          ← Volver al Modo Lectura
-        </button>
-      </div>
-
       <div className="edit-form-card">
         <div className="edit-card-header">
           <span className="badge-edit-active">Edición Activa</span>
@@ -410,12 +397,12 @@ export default function EditEventForm({
                   <label className="form-label-sm">
                     Fecha límite / Jornada <span className="required-star" style={{ color: '#DC2626' }}>*</span>
                   </label>
-                  <input
-                    type="text"
-                    className="input-focus-active"
-                    placeholder="Ej: Hoy, Mañana, 2026-11-20"
+                  <DatePickerField
                     value={sub.fechaLimite}
-                    onChange={(e) => handleUpdateSubtask(idx, 'fechaLimite', e.target.value)}
+                    onChange={(formatted) => handleUpdateSubtask(idx, 'fechaLimite', formatted)}
+                    min={todayStr}
+                    max={formData.fecha || undefined}
+                    placeholder="DD/MM/AAAA"
                   />
                 </div>
 
