@@ -94,3 +94,34 @@ export function jornadasExcedidas(subtareas, limite) {
 export function bloquearTeclasNoNumericas(e) {
   if (['-', '+', 'e', 'E'].includes(e.key)) e.preventDefault();
 }
+
+/**
+ * Intercepta y procesa errores HTTP 409 Conflict de tipo 'overload_conflict' del backend.
+ * Devuelve un objeto estructurado con las cifras exactas del conflicto o null si no aplica.
+ */
+export function parseOverloadError(error) {
+  if (!error) return null;
+  const is409 = error.status === 409 || error.statusCode === 409;
+  const isOverload =
+    error.error === 'overload_conflict' ||
+    error.code === 'overload_conflict' ||
+    error.data?.error === 'overload_conflict' ||
+    error.data?.code === 'overload_conflict';
+
+  if (is409 || isOverload) {
+    const rawData = error.data?.data || error.data || error;
+    const horasTotales = Number(rawData.horas_totales_calculadas ?? rawData.horasTotales ?? 0);
+    const limite = Number(rawData.limite_actual_usuario ?? rawData.limiteDiario ?? 6);
+    const fecha = rawData.fecha || '';
+    return {
+      isOverload: true,
+      horasTotales,
+      limiteDiario: limite,
+      fecha,
+      subtareaAfectada: rawData.subtareaAfectada || null,
+      message: `Quedarías con ${horasTotales}h planificadas (límite ${limite}h)`,
+    };
+  }
+  return null;
+}
+

@@ -79,15 +79,40 @@ export const api = {
 
   // Métodos especializados Sprint 3
   async getCapacity() {
-    return this.get('/users/capacity');
+    const res = await this.get('/users/capacity');
+    if (!res.ok) {
+      const err = new Error('No se pudo cargar el límite actual');
+      err.status = res.status;
+      throw err;
+    }
+    return res.json();
   },
 
   async updateCapacity(limitHoursDay) {
-    return this.put('/users/capacity', { limitHoursDay });
+    const res = await this.put('/users/capacity', { limitHoursDay });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || 'Error al actualizar el límite');
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
   },
 
   async updateSubtask(subtaskId, payload) {
-    return this.patch(`/subtasks/${subtaskId}`, payload);
+    const res = await this.patch(`/subtasks/${subtaskId}`, payload);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || 'Error al actualizar la subtarea');
+      err.status = res.status;
+      err.statusCode = res.status;
+      err.error = data.error;
+      err.code = data.code;
+      err.data = data;
+      throw err;
+    }
+    return data;
   },
 
   async getSubtasksToday(params = '') {

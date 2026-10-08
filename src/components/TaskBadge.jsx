@@ -12,23 +12,20 @@ export default function TaskBadge({ estado = 'Pendiente' }) {
   const normalized = (estado || 'Pendiente').toLowerCase();
 
   let badgeClass = 'badge-pendiente';
-  let label = estado;
+  let label = 'PENDIENTE';
 
   if (normalized === 'hecha' || normalized === 'completada') {
     badgeClass = 'badge-hecha';
     label = 'Hecha';
-  } else if (normalized === 'urgente' || normalized === 'crítica') {
-    badgeClass = 'badge-urgente';
-    label = 'Urgente';
-  } else if (normalized === 'vencida') {
-    badgeClass = 'badge-vencida';
-    label = 'Vencida';
   } else if (normalized === 'postergada' || normalized === 'pospuesta') {
     badgeClass = 'badge-postergada';
     label = 'POSTERGADA';
+  } else if (normalized === 'vencida' || normalized === 'urgente' || normalized === 'crítica') {
+    badgeClass = 'badge-vencida';
+    label = 'VENCIDA';
   } else {
     badgeClass = 'badge-pendiente';
-    label = 'Pendiente';
+    label = 'PENDIENTE';
   }
 
   return (

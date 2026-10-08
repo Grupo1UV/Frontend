@@ -2864,26 +2864,26 @@ a {
 }
 
 .badge-hecha {
-  background-color: #DCFCE7;
-  color: #15803D;
-  border: 1px solid #86EFAC;
-}
-
-.badge-pendiente {
   background-color: #EFF6FF;
-  color: #1D4ED8;
+  color: #2563EB;
   border: 1px solid #BFDBFE;
 }
 
-.badge-vencida {
+.badge-pendiente {
   background-color: #F1F5F9;
   color: #475569;
   border: 1px solid #CBD5E1;
 }
 
+.badge-vencida {
+  background-color: #FEE2E2;
+  color: #DC2626;
+  border: 1px solid #FCA5A5;
+}
+
 .badge-urgente {
   background-color: #FEE2E2;
-  color: var(--red-critical);
+  color: #DC2626;
   border: 1px solid #FCA5A5;
 }
 

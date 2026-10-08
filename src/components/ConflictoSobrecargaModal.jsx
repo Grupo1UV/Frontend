@@ -391,11 +391,11 @@ export default function ConflictoSobrecargaModal({
                   <strong style={{ fontSize: '1.1rem', color: '#DC2626' }}>{horasSubtarea}h</strong>
                 </div>
 
-                {/* 3. Indicador de disponibilidad del día (ej. "5h de 6h") */}
+                {/* 3. Indicador de disponibilidad del día (ej. "5h (de 6h límite)") */}
                 <div style={{ flex: 1.4, padding: '10px', backgroundColor: '#EFF6FF', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
                   <span style={{ fontSize: '0.75rem', color: '#1E40AF', display: 'block' }}>Disponibilidad de la jornada:</span>
                   <strong style={{ fontSize: '1rem', color: '#1D4ED8' }}>
-                    {horasOtras}h de {limiteDiario}h
+                    {horasOtras}h (de {limiteDiario}h límite)
                   </strong>
                   <span style={{ fontSize: '0.75rem', color: '#2563EB', display: 'block', marginTop: '2px' }}>
                     Margen disponible: <strong>{margenDisponible}h</strong>

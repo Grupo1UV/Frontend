@@ -530,13 +530,19 @@ export function EventsProvider({ children }) {
     }
     try {
       supabase.from('subtasks').update(payload).eq('id', subtareaId).then(() => {});
+    } catch {}
+
+    try {
       await api.updateSubtask(subtareaId, {
         fechaLimite: nuevaFecha,
         horasEstimadas: nuevasHoras !== null && nuevasHoras !== undefined ? Number(nuevasHoras) : undefined,
         estado: 'POSTERGADA',
-      }).catch(() => {});
+      });
     } catch (e) {
-      // offline fallback
+      if (e.status === 409 || e.error === 'overload_conflict' || e.data?.error === 'overload_conflict') {
+        throw e;
+      }
+      // offline fallback para errores de red genéricos
     }
   };
 
@@ -558,8 +564,14 @@ export function EventsProvider({ children }) {
     );
     try {
       supabase.from('subtasks').update({ horas_estimadas: horasNum }).eq('id', subtareaId).then(() => {});
-      await api.updateSubtask(subtareaId, { horasEstimadas: horasNum }).catch(() => {});
+    } catch {}
+
+    try {
+      await api.updateSubtask(subtareaId, { horasEstimadas: horasNum });
     } catch (e) {
+      if (e.status === 409 || e.error === 'overload_conflict' || e.data?.error === 'overload_conflict') {
+        throw e;
+      }
       // offline fallback
     }
   };

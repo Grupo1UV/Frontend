@@ -12,6 +12,7 @@ import {
   hoyIso,
   isoToDisplayDate,
   normalizarJornada,
+  parseOverloadError,
 } from '../utils/validacionesHoras';
 
 export default function Hoy() {
@@ -281,6 +282,23 @@ export default function Hoy() {
         message: 'La fecha de la subtarea se actualizó correctamente.',
       });
     } catch (err) {
+      const overload = parseOverloadError(err);
+      if (overload) {
+        setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+        setConflictoState({
+          isOpen: true,
+          conflictoData: {
+            fecha: iso,
+            fechaDisplay: isoToDisplayDate(iso),
+            horasTotales: overload.horasTotales,
+            limiteDiario: overload.limiteDiario,
+            subtareas: [task],
+            subtareaAfectada: task,
+            eventoId: task.eventoId,
+          },
+        });
+        return;
+      }
       setNotificacionModal({
         isOpen: true,
         type: 'error_actualizar',
@@ -324,6 +342,22 @@ export default function Hoy() {
         message: 'La fecha de la subtarea se actualizó correctamente.',
       });
     } catch (err) {
+      const overload = parseOverloadError(err);
+      if (overload) {
+        setConflictoState({
+          isOpen: true,
+          conflictoData: {
+            fecha: nuevaFechaIso,
+            fechaDisplay: nuevaFechaDisplay,
+            horasTotales: overload.horasTotales,
+            limiteDiario: overload.limiteDiario,
+            subtareas: [subtask],
+            subtareaAfectada: subtask,
+            eventoId: subtask.eventoId,
+          },
+        });
+        return;
+      }
       setNotificacionModal({
         isOpen: true,
         type: 'error_actualizar',
@@ -349,6 +383,19 @@ export default function Hoy() {
         message: 'La fecha y las horas de la subtarea se actualizaron correctamente.',
       });
     } catch (err) {
+      const overload = parseOverloadError(err);
+      if (overload) {
+        setConflictoState((prev) => ({
+          ...prev,
+          isOpen: true,
+          conflictoData: {
+            ...prev.conflictoData,
+            horasTotales: overload.horasTotales,
+            limiteDiario: overload.limiteDiario,
+          },
+        }));
+        return;
+      }
       setNotificacionModal({
         isOpen: true,
         type: 'error_actualizar',
@@ -398,9 +445,10 @@ export default function Hoy() {
 
         <EmptyState
           isEmpty={true}
+          icon={<span style={{ fontSize: '3.6rem' }} role="img" aria-label="Taza de café">☕</span>}
           title="No hay tareas programadas."
-          subtitle="Actualmente no cuentas con ninguna tarea programada en tu panel. Crea tu primer evento para comenzar a planificar."
-          actionText="Crear evento"
+          subtitle="Actualmente no cuentas con ninguna tarea programada en tu panel. Crea tu primera actividad para comenzar a planificar."
+          actionText="Crear actividad"
           actionTo="/crear-evento"
         />
       </div>

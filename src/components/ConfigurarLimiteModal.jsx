@@ -22,19 +22,25 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      try {
-        setValorInput(limiteDiario ? String(limiteDiario) : '');
-        setErrorMsg('');
-        setSuccessMsg('');
-        setIsSaving(false);
-        const timer = setTimeout(() => {
-          if (inputRef.current) inputRef.current.focus();
-        }, 50);
-        return () => clearTimeout(timer);
-      } catch (err) {
-        console.error('Error al inicializar límite actual:', err);
-        setErrorMsg('No se pudo cargar el límite actual');
-      }
+      setValorInput(limiteDiario ? String(limiteDiario) : '');
+      setErrorMsg('');
+      setSuccessMsg('');
+      setIsSaving(false);
+
+      // Consulta del límite actual
+      api.getCapacity()
+        .then((res) => {
+          const val = res?.data?.limitHoursDay ?? res?.limitHoursDay ?? res?.data?.limiteDiario ?? res?.limiteDiario;
+          if (val) setValorInput(String(val));
+        })
+        .catch(() => {
+          setErrorMsg('No se pudo cargar el límite actual');
+        });
+
+      const timer = setTimeout(() => {
+        if (inputRef.current) inputRef.current.focus();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, limiteDiario]);
 
@@ -56,13 +62,13 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
     setSuccessMsg('');
 
     if (valorInput === '' || valorInput === null || valorInput === undefined) {
-      setErrorMsg('El valor debe estar entre 1 y 16 horas');
+      setErrorMsg('El valor debe estar entre 1 y 16');
       return;
     }
 
     const n = Number(valorInput);
     if (!Number.isFinite(n) || n < 1 || n > 16) {
-      setErrorMsg('El valor debe estar entre 1 y 16 horas');
+      setErrorMsg('El valor debe estar entre 1 y 16');
       return;
     }
 
@@ -77,7 +83,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
         }, 800);
       } else {
         setIsSaving(false);
-        setErrorMsg(res.error || 'El valor debe estar entre 1 y 16 horas');
+        setErrorMsg(res.error || 'El valor debe estar entre 1 y 16');
       }
     } catch {
       setIsSaving(false);
@@ -99,7 +105,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
           </div>
           <div>
             <h3 id="config-limit-title" className="system-modal-title">
-              Configuración de Capacidad Diaria
+              Límite Diario
             </h3>
             <p className="system-modal-desc" style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '2px' }}>
               Define tu margen máximo de horas trabajables por jornada (h/día).
