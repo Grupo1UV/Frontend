@@ -7,7 +7,6 @@ import ErrorMessage from '../components/ErrorMessage';
 import SystemModal from '../components/SystemModal';
 import Button from '../components/Button';
 import DatePickerField from '../components/DatePickerField';
-import ConfigurarLimiteModal from '../components/ConfigurarLimiteModal';
 import ConflictoSobrecargaModal from '../components/ConflictoSobrecargaModal';
 import {
   hoyIso,
@@ -45,7 +44,6 @@ export default function Hoy() {
   });
 
   // Sprint 3: Estados de Modales de Capacidad y Reprogramación
-  const [showConfigLimite, setShowConfigLimite] = useState(false);
   const [reprogramarState, setReprogramarState] = useState({
     isOpen: false,
     task: null,
@@ -457,17 +455,6 @@ export default function Hoy() {
             )}
           </div>
 
-          {/* Botón para Configuración de Límite Diario de Horas (Sprint 3) */}
-          <button
-            type="button"
-            className="btn-order-rule-toggle btn-capacity-header-pill"
-            onClick={() => setShowConfigLimite(true)}
-            title="Configurar capacidad operativa diaria"
-            style={{ fontWeight: 600, color: '#1E40AF', borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }}
-          >
-            <span aria-hidden="true">⏱️</span> Límite: {limiteDiario}h/día
-          </button>
-
           <div className="kpi-group">
             <div className="kpi-card">
               <span className="kpi-label">Urgentes hoy</span>
@@ -827,12 +814,6 @@ export default function Hoy() {
         onClose={() => setConflictoState({ isOpen: false, conflictoData: null })}
         onResolverMover={handleResolverConflictoMover}
         onResolverReducir={handleResolverConflictoReducir}
-      />
-
-      {/* Modal de Configuración de Límite Diario (Requerimiento 1) */}
-      <ConfigurarLimiteModal
-        isOpen={showConfigLimite}
-        onClose={() => setShowConfigLimite(false)}
       />
 
       {/* Modal de Notificación Explícita (Sprint 3: Módulo 4) */}
