@@ -4,6 +4,7 @@ import { useEvents } from '../context/EventsContext';
 import SystemModal from '../components/SystemModal';
 import Button from '../components/Button';
 import DatePickerField from '../components/DatePickerField';
+import ConflictoSobrecargaModal from '../components/ConflictoSobrecargaModal';
 import {
   HORAS_MAX_GESTION,
   HORAS_MIN_GESTION,
@@ -41,7 +42,7 @@ import {
  */
 export default function CrearEvento() {
   const navigate = useNavigate();
-  const { crearEvento } = useEvents();
+  const { crearEvento, limiteDiario } = useEvents();
 
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState('Boda');
@@ -56,7 +57,13 @@ export default function CrearEvento() {
   const [nuevaSubtarea, setNuevaSubtarea] = useState('');
   const [nuevasHoras, setNuevasHoras] = useState(2);
   const [nuevaFechaLimite, setNuevaFechaLimite] = useState('');
-  const [limiteJornada, setLimiteJornada] = useState(LIMITE_JORNADA_DEFAULT);
+  const limiteJornada = limiteDiario || LIMITE_JORNADA_DEFAULT;
+
+  // Estado del Modal de Conflicto de Sobrecarga (Sprint 3)
+  const [conflictoModalState, setConflictoModalState] = useState({
+    isOpen: false,
+    data: null,
+  });
 
   // Errores de validación inline
   const [errors, setErrors] = useState({});
@@ -143,15 +150,33 @@ export default function CrearEvento() {
       nuevosErrores.nuevaFechaLimite = 'La gestión debe vencer antes o el mismo día del evento.';
     }
 
-    // Validación dinámica del límite por jornada
+    // Sprint 3: Validación dinámica de sobrecarga por jornada -> abre modal de conflicto
     const horasNum = Number(nuevasHoras);
-    if (!nuevosErrores.nuevasHoras && !nuevosErrores.nuevaFechaLimite) {
+    if (!nuevosErrores.nuevaSubtarea && !nuevosErrores.nuevasHoras && !nuevosErrores.nuevaFechaLimite) {
       const yaAsignadas = cargaPorJornada[fechaGestionIso] || 0;
       if (yaAsignadas + horasNum > limiteJornada) {
-        const disponibles = Math.max(limiteJornada - yaAsignadas, 0);
-        nuevosErrores.nuevasHoras =
-          `Supera el límite de ${limiteJornada} h para el ${fechaGestionDisplay} ` +
-          `(ya hay ${yaAsignadas} h; disponibles: ${disponibles} h).`;
+        const subsDelDia = subtareasPlan.filter(
+          (s) => normalizarJornada(s.fechaLimite) === fechaGestionIso
+        );
+        const subNueva = {
+          id: `plan-${Date.now()}`,
+          titulo: nuevaSubtarea.trim(),
+          horasEstimadas: horasNum,
+          fechaLimite: fechaGestionDisplay,
+          responsable: 'Equipo Logístico',
+        };
+        setConflictoModalState({
+          isOpen: true,
+          data: {
+            fecha: fechaGestionIso,
+            fechaDisplay: fechaGestionDisplay,
+            horasTotales: Math.round((yaAsignadas + horasNum) * 10) / 10,
+            limiteDiario: limiteJornada,
+            subtareas: [...subsDelDia, subNueva],
+            subtareaAfectada: subNueva,
+          },
+        });
+        return;
       }
     }
 
@@ -179,6 +204,57 @@ export default function CrearEvento() {
     setSubtareasPlan((prev) => prev.filter((s) => s.id !== id));
   };
 
+  // Sprint 3: Resolver conflicto en Crear Evento - Mover a otro día
+  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay) => {
+    setSubtareasPlan((prev) => {
+      const exists = prev.some((s) => s.id === subtask.id);
+      if (exists) {
+        return prev.map((s) =>
+          s.id === subtask.id
+            ? { ...s, fechaLimite: nuevaFechaDisplay, estado: 'POSTERGADA' }
+            : s
+        );
+      }
+      return [
+        ...prev,
+        {
+          ...subtask,
+          fechaLimite: nuevaFechaDisplay,
+          estado: 'POSTERGADA',
+        },
+      ];
+    });
+    setNuevaSubtarea('');
+    setNuevasHoras(2);
+    setNuevaFechaLimite('');
+    setConflictoModalState({ isOpen: false, data: null });
+  };
+
+  // Sprint 3: Resolver conflicto en Crear Evento - Reducir horas estimadas
+  const handleResolverConflictoReducir = (subtask, nuevasHoras) => {
+    setSubtareasPlan((prev) => {
+      const exists = prev.some((s) => s.id === subtask.id);
+      if (exists) {
+        return prev.map((s) =>
+          s.id === subtask.id
+            ? { ...s, horasEstimadas: nuevasHoras }
+            : s
+        );
+      }
+      return [
+        ...prev,
+        {
+          ...subtask,
+          horasEstimadas: nuevasHoras,
+        },
+      ];
+    });
+    setNuevaSubtarea('');
+    setNuevasHoras(2);
+    setNuevaFechaLimite('');
+    setConflictoModalState({ isOpen: false, data: null });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -187,15 +263,29 @@ export default function CrearEvento() {
     const errLugar = validateField('lugar', lugar);
     const errAsistentes = validateField('asistentes', asistentes);
 
-    // Validación del plan: ninguna jornada puede exceder el límite y ninguna
-    // gestión puede vencer después del evento (p. ej. si se cambió la fecha luego).
+    // Sprint 3 (Requerimiento 2): Si la suma supera el límite diario, bloquea el guardado directo y despliega modal
+    if (excedidas.length > 0) {
+      const primera = excedidas[0];
+      const subs = subtareasPlan.filter((s) => normalizarJornada(s.fechaLimite) === primera[0]);
+      setConflictoModalState({
+        isOpen: true,
+        data: {
+          fecha: primera[0],
+          fechaDisplay: isoToDisplayDate(primera[0]),
+          horasTotales: primera[1],
+          limiteDiario: limiteJornada,
+          subtareas: subs,
+          subtareaAfectada: subs[subs.length - 1] || subs[0],
+        },
+      });
+      return;
+    }
+
     const gestionesFueraDeFecha = fecha
       ? subtareasPlan.filter((s) => s.fechaLimite > fecha)
       : [];
     let errPlan = '';
-    if (excedidas.length > 0) {
-      errPlan = `Hay jornadas que superan el límite de ${limiteJornada} h. Ajusta las horas o las fechas antes de guardar.`;
-    } else if (gestionesFueraDeFecha.length > 0) {
+    if (gestionesFueraDeFecha.length > 0) {
       errPlan = 'Hay gestiones que vencen después de la fecha del evento.';
     }
 
@@ -577,6 +667,15 @@ export default function CrearEvento() {
         type="evento_guardado"
         onClose={handleCloseSuccess}
         onConfirm={handleCloseSuccess}
+      />
+
+      {/* Modal de Conflicto de Sobrecarga (Sprint 3) */}
+      <ConflictoSobrecargaModal
+        isOpen={conflictoModalState.isOpen}
+        conflictoData={conflictoModalState.data}
+        onClose={() => setConflictoModalState({ isOpen: false, data: null })}
+        onResolverMover={handleResolverConflictoMover}
+        onResolverReducir={handleResolverConflictoReducir}
       />
     </div>
   );

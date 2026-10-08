@@ -4,7 +4,7 @@
  */
 export const HORAS_MIN_GESTION = 0.5;
 export const HORAS_MAX_GESTION = 12;
-export const LIMITE_JORNADA_DEFAULT = 8;
+export const LIMITE_JORNADA_DEFAULT = 6;
 export const LIMITE_JORNADA_MIN = 1;
 export const LIMITE_JORNADA_MAX = 16;
 

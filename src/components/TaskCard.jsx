@@ -70,13 +70,24 @@ export default function TaskCard({
           </button>
         )}
 
-        <Link
-          to={`/evento/${task.eventoId}?modo=editar`}
-          className="btn-action-ghost"
-          title="Reprogramar o editar tiempos de la gestión"
-        >
-          Reprogramar
-        </Link>
+        {onReprogram ? (
+          <button
+            type="button"
+            className="btn-action-ghost"
+            onClick={() => onReprogram(task.eventoId, task)}
+            title="Reprogramar fecha de la gestión"
+          >
+            Reprogramar
+          </button>
+        ) : (
+          <Link
+            to={`/evento/${task.eventoId}?modo=editar`}
+            className="btn-action-ghost"
+            title="Reprogramar o editar tiempos de la gestión"
+          >
+            Reprogramar
+          </Link>
+        )}
 
         <Link
           to={`/evento/${task.eventoId}`}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { normalizarJornada } from '../utils/validacionesHoras';
 
 const EventsContext = createContext(null);
 
@@ -162,6 +163,37 @@ export function EventsProvider({ children }) {
   const [hasCateringModuleError, setHasCateringModuleError] = useState(false);
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [isLoadingCatering, setIsLoadingCatering] = useState(false);
+
+  // Límite diario de capacidad en horas (Sprint 3: 6 horas por defecto, rango 1-16)
+  const [limiteDiario, setLimiteDiario] = useState(() => {
+    try {
+      const stored = localStorage.getItem('eventify_limite_diario');
+      if (stored) {
+        const val = Number(stored);
+        if (Number.isFinite(val) && val >= 1 && val <= 16) {
+          return val;
+        }
+      }
+    } catch (e) {
+      console.warn('Error leyendo límite diario', e);
+    }
+    return 6; // 6 horas por defecto
+  });
+
+  const cambiarLimiteDiario = (nuevoValor) => {
+    const val = Number(nuevoValor);
+    if (!Number.isFinite(val) || val < 1 || val > 16) {
+      return { ok: false, error: 'El valor debe estar entre 1 y 16 horas' };
+    }
+    const sanitized = Math.round(val * 10) / 10;
+    setLimiteDiario(sanitized);
+    try {
+      localStorage.setItem('eventify_limite_diario', String(sanitized));
+    } catch (e) {
+      console.warn('Error guardando límite diario en localStorage', e);
+    }
+    return { ok: true, mensaje: 'Se cambió exitosamente el límite diario' };
+  };
 
   // Sincronizar en localStorage por clave aislada de usuario
   useEffect(() => {
@@ -439,8 +471,8 @@ export function EventsProvider({ children }) {
     supabase.from('subtasks').update({ estado: nuevoEstado }).eq('id', subtareaId).then(() => {});
   };
 
-  // Posponer subtarea
-  const posponerSubtarea = (eventoId, subtareaId) => {
+  // Posponer subtarea (Sprint 3: actualiza estado a 'POSTERGADA')
+  const posponerSubtarea = (eventoId, subtareaId, nuevaFecha = 'Próxima semana') => {
     setEventos((prev) =>
       prev.map((evt) => {
         if (evt.id !== eventoId) return evt;
@@ -448,13 +480,77 @@ export function EventsProvider({ children }) {
           ...evt,
           subtareas: evt.subtareas.map((sub) =>
             sub.id === subtareaId
-              ? { ...sub, fechaLimite: 'Próxima semana' }
+              ? { ...sub, fechaLimite: nuevaFecha, estado: 'POSTERGADA' }
               : sub
           ),
         };
       })
     );
-    supabase.from('subtasks').update({ fecha_limite: 'Próxima semana' }).eq('id', subtareaId).then(() => {});
+    supabase.from('subtasks').update({ fecha_limite: nuevaFecha, estado: 'POSTERGADA' }).eq('id', subtareaId).then(() => {});
+  };
+
+  // Reprogramar subtarea (Sprint 3: Actualiza fecha y estado automáticamente a 'POSTERGADA')
+  const reprogramarSubtarea = (eventoId, subtareaId, nuevaFecha, nuevasHoras = null) => {
+    setEventos((prev) =>
+      prev.map((evt) => {
+        if (evt.id !== eventoId) return evt;
+        return {
+          ...evt,
+          subtareas: evt.subtareas.map((sub) => {
+            if (sub.id === subtareaId) {
+              const updated = {
+                ...sub,
+                fechaLimite: nuevaFecha,
+                estado: 'POSTERGADA',
+              };
+              if (nuevasHoras !== null && nuevasHoras !== undefined) {
+                updated.horasEstimadas = Number(nuevasHoras);
+              }
+              return updated;
+            }
+            return sub;
+          }),
+        };
+      })
+    );
+    const payload = { fecha_limite: nuevaFecha, estado: 'POSTERGADA' };
+    if (nuevasHoras !== null && nuevasHoras !== undefined) {
+      payload.horas_estimadas = Number(nuevasHoras);
+    }
+    supabase.from('subtasks').update(payload).eq('id', subtareaId).then(() => {});
+  };
+
+  // Actualizar horas de subtarea (Sprint 3: Modal Reducir Horas)
+  const actualizarHorasSubtarea = (eventoId, subtareaId, nuevasHoras) => {
+    const horasNum = Number(nuevasHoras);
+    setEventos((prev) =>
+      prev.map((evt) => {
+        if (evt.id !== eventoId) return evt;
+        return {
+          ...evt,
+          subtareas: evt.subtareas.map((sub) =>
+            sub.id === subtareaId
+              ? { ...sub, horasEstimadas: horasNum }
+              : sub
+          ),
+        };
+      })
+    );
+    supabase.from('subtasks').update({ horas_estimadas: horasNum }).eq('id', subtareaId).then(() => {});
+  };
+
+  // Helper para sumar horas asignadas a una jornada específica (con opción de excluir una subtarea)
+  const obtenerHorasAsignadasAFecha = (fecha, excludeSubtaskId = null) => {
+    const targetNorm = normalizarJornada(fecha);
+    let total = 0;
+    eventos.forEach((evt) => {
+      (evt.subtareas || []).forEach((s) => {
+        if (s.id !== excludeSubtaskId && s.estado !== 'Hecha' && normalizarJornada(s.fechaLimite) === targetNorm) {
+          total += Number(s.horasEstimadas) || 0;
+        }
+      });
+    });
+    return Math.round(total * 10) / 10;
   };
 
   // Eliminar subtarea logística (Decisión 4)
@@ -555,6 +651,13 @@ export function EventsProvider({ children }) {
         currentUser,
         login,
         logout,
+        // Sprint 3: Gestión de Capacidad y Sobrecarga
+        limiteDiario,
+        setLimiteDiario,
+        cambiarLimiteDiario,
+        reprogramarSubtarea,
+        actualizarHorasSubtarea,
+        obtenerHorasAsignadasAFecha,
         // Helpers para evaluación
         restaurarDatosIniciales,
         vaciarEventos,

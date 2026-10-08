@@ -5,6 +5,15 @@ import TaskCard from '../components/TaskCard';
 import EmptyState from '../components/EmptyState';
 import ErrorMessage from '../components/ErrorMessage';
 import SystemModal from '../components/SystemModal';
+import Button from '../components/Button';
+import DatePickerField from '../components/DatePickerField';
+import ConfigurarLimiteModal from '../components/ConfigurarLimiteModal';
+import ConflictoSobrecargaModal from '../components/ConflictoSobrecargaModal';
+import {
+  hoyIso,
+  isoToDisplayDate,
+  normalizarJornada,
+} from '../utils/validacionesHoras';
 
 export default function Hoy() {
   const {
@@ -13,6 +22,10 @@ export default function Hoy() {
     obtenerTareasHoy,
     marcarSubtareaHecha,
     posponerSubtarea,
+    reprogramarSubtarea,
+    actualizarHorasSubtarea,
+    obtenerHorasAsignadasAFecha,
+    limiteDiario,
     eliminarSubtarea,
     hasGlobalError,
     hasCateringModuleError,
@@ -29,6 +42,20 @@ export default function Hoy() {
     eventoId: null,
     subtarea: null,
   });
+
+  // Sprint 3: Estados de Modales de Capacidad y Reprogramación
+  const [showConfigLimite, setShowConfigLimite] = useState(false);
+  const [reprogramarState, setReprogramarState] = useState({
+    isOpen: false,
+    task: null,
+    nuevaFecha: '',
+    error: '',
+  });
+  const [conflictoState, setConflictoState] = useState({
+    isOpen: false,
+    conflictoData: null,
+  });
+  const [toastMessage, setToastMessage] = useState('');
 
   // Estado del popover interactivo "¿Cómo se ordena?" (Regla UI oficial)
   const [showOrderRule, setShowOrderRule] = useState(false);
@@ -97,7 +124,10 @@ export default function Hoy() {
     } else if (filtroEstado === 'pendiente') {
       if (t.estado !== 'Pendiente') return false;
     } else if (filtroEstado === 'pospuesta') {
-      const isPospuesta = t.estado === 'Pospuesta' || t.fechaLimite === 'Próxima semana';
+      const isPospuesta =
+        t.estado === 'Pospuesta' ||
+        t.estado === 'POSTERGADA' ||
+        t.fechaLimite === 'Próxima semana';
       if (!isPospuesta) return false;
     } else if (filtroEstado === 'vencida') {
       const iso = parseFechaLimite(t.fechaLimite);
@@ -181,6 +211,103 @@ export default function Hoy() {
     } else {
       setModalState({ isOpen: false, type: 'eliminar_tarea', eventoId: null, subtarea: null });
     }
+  };
+
+  // Sprint 3: Abrir modal de reprogramación interactiva
+  const handleAbrirReprogramar = (_eventoId, task) => {
+    setReprogramarState({
+      isOpen: true,
+      task,
+      nuevaFecha: '',
+      error: '',
+    });
+  };
+
+  // Sprint 3: Confirmar reprogramación con validación de sobrecarga
+  const handleConfirmarReprogramar = () => {
+    const { task, nuevaFecha } = reprogramarState;
+    if (!task) return;
+    if (!nuevaFecha) {
+      setReprogramarState((prev) => ({ ...prev, error: 'Selecciona una fecha válida.' }));
+      return;
+    }
+
+    const iso = normalizarJornada(nuevaFecha);
+    const today = hoyIso();
+    if (iso < today) {
+      setReprogramarState((prev) => ({ ...prev, error: 'La fecha no puede ser anterior a hoy.' }));
+      return;
+    }
+
+    // Sumar horas ya asignadas en esa fecha
+    const horasExistentes = obtenerHorasAsignadasAFecha(iso, task.id);
+    const horasTarea = Number(task.horasEstimadas) || 0;
+    const totalConTarea = Math.round((horasExistentes + horasTarea) * 10) / 10;
+
+    if (totalConTarea > limiteDiario) {
+      // Bloquear guardado directo y desplegar modal "Conflicto de sobrecarga"
+      setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+      setConflictoState({
+        isOpen: true,
+        conflictoData: {
+          fecha: iso,
+          fechaDisplay: isoToDisplayDate(iso),
+          horasTotales: totalConTarea,
+          limiteDiario,
+          subtareas: [task],
+          subtareaAfectada: task,
+          eventoId: task.eventoId,
+        },
+      });
+      return;
+    }
+
+    // Sin conflicto: guardar y actualizar automáticamente a POSTERGADA
+    const displayFecha = isoToDisplayDate(iso);
+    reprogramarSubtarea(task.eventoId, task.id, displayFecha);
+    setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+    setToastMessage(`Gestión reprogramada exitosamente para el ${displayFecha}`);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
+
+  // Sprint 3: Resolución Conflicto Opción 1 - Mover a otro día
+  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay, nuevaFechaIso) => {
+    const horasExistentes = obtenerHorasAsignadasAFecha(nuevaFechaIso, subtask.id);
+    const horasTarea = Number(subtask.horasEstimadas) || 0;
+    const totalConTarea = Math.round((horasExistentes + horasTarea) * 10) / 10;
+
+    if (totalConTarea > limiteDiario) {
+      setConflictoState({
+        isOpen: true,
+        conflictoData: {
+          fecha: nuevaFechaIso,
+          fechaDisplay: nuevaFechaDisplay,
+          horasTotales: totalConTarea,
+          limiteDiario,
+          subtareas: [subtask],
+          subtareaAfectada: subtask,
+          eventoId: subtask.eventoId,
+        },
+      });
+      return;
+    }
+
+    reprogramarSubtarea(subtask.eventoId, subtask.id, nuevaFechaDisplay);
+    setConflictoState({ isOpen: false, conflictoData: null });
+    setToastMessage(`Gestión reprogramada exitosamente para el ${nuevaFechaDisplay}`);
+    setTimeout(() => setToastMessage(''), 3500);
+  };
+
+  // Sprint 3: Resolución Conflicto Opción 2 - Reducir horas estimadas
+  const handleResolverConflictoReducir = (subtask, nuevasHoras) => {
+    actualizarHorasSubtarea(subtask.eventoId, subtask.id, nuevasHoras);
+    if (conflictoState.conflictoData?.fecha) {
+      const fechaDisp = conflictoState.conflictoData.fechaDisplay || isoToDisplayDate(conflictoState.conflictoData.fecha);
+      reprogramarSubtarea(subtask.eventoId, subtask.id, fechaDisp, nuevasHoras);
+    }
+    setConflictoState({ isOpen: false, conflictoData: null });
+    setToastMessage('Las horas de la subtarea se actualizaron correctamente');
+    setTimeout(() => setToastMessage(''), 3500);
   };
 
   // Error Global Crítico
@@ -267,6 +394,17 @@ export default function Hoy() {
               </div>
             )}
           </div>
+
+          {/* Botón para Configuración de Límite Diario de Horas (Sprint 3) */}
+          <button
+            type="button"
+            className="btn-order-rule-toggle btn-capacity-header-pill"
+            onClick={() => setShowConfigLimite(true)}
+            title="Configurar capacidad operativa diaria"
+            style={{ fontWeight: 600, color: '#1E40AF', borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }}
+          >
+            <span aria-hidden="true">⏱️</span> Límite: {limiteDiario}h/día
+          </button>
 
           <div className="kpi-group">
             <div className="kpi-card">
@@ -403,6 +541,7 @@ export default function Hoy() {
                   task={task}
                   onComplete={marcarSubtareaHecha}
                   onSnooze={posponerSubtarea}
+                  onReprogram={handleAbrirReprogramar}
                   onDeleteRequest={handleRequestDeleteTask}
                 />
               ))
@@ -447,6 +586,7 @@ export default function Hoy() {
                 task={task}
                 onComplete={marcarSubtareaHecha}
                 onSnooze={posponerSubtarea}
+                onReprogram={handleAbrirReprogramar}
                 onDeleteRequest={handleRequestDeleteTask}
               />
             ))}
@@ -481,6 +621,7 @@ export default function Hoy() {
                 task={task}
                 onComplete={marcarSubtareaHecha}
                 onSnooze={posponerSubtarea}
+                onReprogram={handleAbrirReprogramar}
                 onDeleteRequest={handleRequestDeleteTask}
               />
             ))}
@@ -515,6 +656,7 @@ export default function Hoy() {
                 task={task}
                 onComplete={marcarSubtareaHecha}
                 onSnooze={posponerSubtarea}
+                onReprogram={handleAbrirReprogramar}
                 onDeleteRequest={handleRequestDeleteTask}
               />
             ))}
@@ -530,6 +672,94 @@ export default function Hoy() {
         onClose={() => setModalState({ isOpen: false, type: 'eliminar_tarea', eventoId: null, subtarea: null })}
         onConfirm={handleConfirmModalAction}
       />
+
+      {/* Modal Interactivo de Reprogramación de Fecha (Sprint 3) */}
+      {reprogramarState.isOpen && (
+        <div
+          className="modal-overlay-focus"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reprogramar-modal-title"
+        >
+          <div className="system-modal-card">
+            <div className="system-modal-header">
+              <div className="modal-icon-badge" style={{ backgroundColor: '#DBEAFE' }} aria-hidden="true">
+                <span style={{ fontSize: '1.3rem' }}>📅</span>
+              </div>
+              <div>
+                <h3 id="reprogramar-modal-title" className="system-modal-title">
+                  Reprogramar Gestión Logística
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '2px' }}>
+                  Gestión: <strong>{reprogramarState.task?.titulo}</strong> ({reprogramarState.task?.horasEstimadas}h)
+                </p>
+              </div>
+            </div>
+
+            {reprogramarState.error && (
+              <div className="limit-error-banner" role="alert">
+                <span aria-hidden="true">⚠️</span> {reprogramarState.error}
+              </div>
+            )}
+
+            <div className="form-field" style={{ margin: '12px 0' }}>
+              <label className="form-label">
+                Nueva fecha límite / Jornada <span className="required-star">*</span>
+              </label>
+              <DatePickerField
+                value={reprogramarState.nuevaFecha}
+                onChange={(formatted) =>
+                  setReprogramarState((prev) => ({ ...prev, nuevaFecha: formatted, error: '' }))
+                }
+                min={todayIso}
+                placeholder="DD/MM/AAAA"
+              />
+              <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '6px' }}>
+                Al guardar, la tarea quedará marcada automáticamente en estado <strong>POSTERGADA</strong>.
+              </p>
+            </div>
+
+            <div className="system-modal-actions">
+              <Button
+                variant="neutral"
+                type="button"
+                onClick={() => setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' })}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                type="button"
+                onClick={handleConfirmarReprogramar}
+              >
+                Confirmar fecha
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Conflicto de Sobrecarga (Requerimiento 2 y 3) */}
+      <ConflictoSobrecargaModal
+        isOpen={conflictoState.isOpen}
+        conflictoData={conflictoState.conflictoData}
+        onClose={() => setConflictoState({ isOpen: false, conflictoData: null })}
+        onResolverMover={handleResolverConflictoMover}
+        onResolverReducir={handleResolverConflictoReducir}
+      />
+
+      {/* Modal de Configuración de Límite Diario (Requerimiento 1) */}
+      <ConfigurarLimiteModal
+        isOpen={showConfigLimite}
+        onClose={() => setShowConfigLimite(false)}
+      />
+
+      {/* Toast Notificación Flotante */}
+      {toastMessage && (
+        <aside className="toast-notification-floating" role="status" aria-live="polite">
+          <span aria-hidden="true">✓</span> {toastMessage}
+        </aside>
+      )}
     </div>
   );
 }

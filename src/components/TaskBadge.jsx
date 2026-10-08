@@ -23,6 +23,9 @@ export default function TaskBadge({ estado = 'Pendiente' }) {
   } else if (normalized === 'vencida') {
     badgeClass = 'badge-vencida';
     label = 'Vencida';
+  } else if (normalized === 'postergada' || normalized === 'pospuesta') {
+    badgeClass = 'badge-postergada';
+    label = 'POSTERGADA';
   } else {
     badgeClass = 'badge-pendiente';
     label = 'Pendiente';

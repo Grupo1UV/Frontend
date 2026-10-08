@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import Button from './Button';
 import DatePickerField from './DatePickerField';
+import ConflictoSobrecargaModal from './ConflictoSobrecargaModal';
+import { useEvents } from '../context/EventsContext';
 import {
   HORAS_MIN_GESTION,
   HORAS_MAX_GESTION,
@@ -11,6 +13,8 @@ import {
   horasPorJornada,
   jornadasExcedidas,
   hoyIso,
+  normalizarJornada,
+  isoToDisplayDate,
 } from '../utils/validacionesHoras';
 
 export default function EditEventForm({
@@ -19,6 +23,9 @@ export default function EditEventForm({
   onCancel,
   onDeleteSubtask = null,
 }) {
+  const { limiteDiario } = useEvents();
+  const limiteActivo = limiteDiario || 6;
+
   const [formData, setFormData] = useState(() => ({
     nombre: evento?.nombre || '',
     tipo: evento?.tipo || 'Boda',
@@ -26,9 +33,14 @@ export default function EditEventForm({
     lugar: evento?.lugar || '',
     asistentes: evento?.asistentes !== undefined && evento?.asistentes !== '' ? evento.asistentes : '',
     descripcion: evento?.descripcion || '',
-    limiteHorasPorJornada: 8,
+    limiteHorasPorJornada: limiteActivo,
     subtareas: evento?.subtareas ? JSON.parse(JSON.stringify(evento.subtareas)) : [],
   }));
+
+  const [conflictoModalData, setConflictoModalData] = useState({
+    isOpen: false,
+    conflicto: null,
+  });
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -128,6 +140,32 @@ export default function EditEventForm({
     }
   }, [evento?.subtareas]);
 
+  // Sprint 3: Resolver conflicto de sobrecarga - Mover a otro día
+  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay) => {
+    setFormData((prev) => ({
+      ...prev,
+      subtareas: prev.subtareas.map((s) =>
+        s.id === subtask.id
+          ? { ...s, fechaLimite: nuevaFechaDisplay, estado: 'POSTERGADA' }
+          : s
+      ),
+    }));
+    setConflictoModalData({ isOpen: false, conflicto: null });
+  };
+
+  // Sprint 3: Resolver conflicto de sobrecarga - Reducir horas estimadas
+  const handleResolverConflictoReducir = (subtask, nuevasHoras) => {
+    setFormData((prev) => ({
+      ...prev,
+      subtareas: prev.subtareas.map((s) =>
+        s.id === subtask.id
+          ? { ...s, horasEstimadas: nuevasHoras }
+          : s
+      ),
+    }));
+    setConflictoModalData({ isOpen: false, conflicto: null });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
@@ -144,10 +182,28 @@ export default function EditEventForm({
       }
     });
 
-    let errPlan = '';
+    // Sprint 3 (Requerimiento 2): Si la suma supera el límite diario, bloquea el guardado directo y despliega modal de sobrecarga
     if (tieneConflicto) {
-      errPlan = `Hay jornadas que superan el límite de ${formData.limiteHorasPorJornada} h. Ajusta las horas para continuar.`;
-    } else if (hayErrorSubtarea) {
+      const primerConflicto = fechasConConflicto[0];
+      const subsDelDia = formData.subtareas.filter(
+        (s) => normalizarJornada(s.fechaLimite) === primerConflicto[0]
+      );
+      setConflictoModalData({
+        isOpen: true,
+        conflicto: {
+          fecha: primerConflicto[0],
+          fechaDisplay: isoToDisplayDate(primerConflicto[0]),
+          horasTotales: primerConflicto[1],
+          limiteDiario: formData.limiteHorasPorJornada,
+          subtareas: subsDelDia,
+          subtareaAfectada: subsDelDia[subsDelDia.length - 1] || subsDelDia[0],
+        },
+      });
+      return;
+    }
+
+    let errPlan = '';
+    if (hayErrorSubtarea) {
       errPlan = 'Verifica que todas las gestiones tengan nombre y horas válidas (0.5 a 12 h).';
     }
 
@@ -489,6 +545,15 @@ export default function EditEventForm({
           </Button>
         </div>
       </div>
+
+      {/* Modal de Conflicto de Sobrecarga (Sprint 3) */}
+      <ConflictoSobrecargaModal
+        isOpen={conflictoModalData.isOpen}
+        conflictoData={conflictoModalData.conflicto}
+        onClose={() => setConflictoModalData({ isOpen: false, conflicto: null })}
+        onResolverMover={handleResolverConflictoMover}
+        onResolverReducir={handleResolverConflictoReducir}
+      />
     </form>
   );
 }

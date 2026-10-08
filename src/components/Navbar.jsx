@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { useEvents } from '../context/EventsContext';
 import eventifyBadgeImg from '../assets/eventify-badge.png';
+import ConfigurarLimiteModal from './ConfigurarLimiteModal';
 
 export default function Navbar() {
-  const { eventos, currentUser, logout } = useEvents();
+  const { eventos, currentUser, logout, limiteDiario } = useEvents();
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
   return (
     <header className="main-navbar">
@@ -52,6 +54,16 @@ export default function Navbar() {
             Progreso
           </NavLink>
 
+          {/* Botón para Configurar Límite Diario de Horas (Sprint 3) */}
+          <button
+            type="button"
+            className="nav-item btn-navbar-capacity"
+            onClick={() => setShowConfigModal(true)}
+            title="Configurar límite diario de horas"
+          >
+            <span aria-hidden="true">⏱️</span> {limiteDiario}h/día
+          </button>
+
           {/* Enlace directo a Iniciar Sesión / Perfil */}
           <NavLink
             to="/login"
@@ -73,6 +85,11 @@ export default function Navbar() {
           )}
         </nav>
       </div>
+
+      <ConfigurarLimiteModal
+        isOpen={showConfigModal}
+        onClose={() => setShowConfigModal(false)}
+      />
     </header>
   );
 }

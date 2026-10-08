@@ -2871,6 +2871,12 @@ a {
   border: 1px solid #FCA5A5;
 }
 
+.badge-postergada {
+  background-color: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FCD34D;
+}
+
 /* 4. Modales del Sistema */
 .system-modal-card {
   background-color: #FFFFFF;
@@ -3728,4 +3734,129 @@ a {
   border-top: 1px dashed #E2E8F0;
   font-size: 0.82rem;
   color: #64748B;
+}
+
+/* ========================================================================== */
+/* SPRINT 3: Capacidad Diaria, Detección de Conflicto y Sobrecarga             */
+/* ========================================================================== */
+
+.btn-navbar-capacity {
+  background-color: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  border: 1px solid #BFDBFE !important;
+  border-radius: 9999px !important;
+  padding: 5px 12px !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-navbar-capacity:hover {
+  background-color: #DBEAFE !important;
+  border-color: #93C5FD !important;
+  transform: translateY(-1px);
+}
+
+.btn-capacity-header-pill {
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.btn-capacity-header-pill:hover {
+  background-color: #DBEAFE !important;
+  transform: translateY(-1px);
+}
+
+.modal-card-limit {
+  border-top: 5px solid #2563EB;
+}
+
+.icon-badge-limit {
+  background-color: #EFF6FF;
+}
+
+.modal-card-conflicto {
+  border-top: 5px solid #DC2626;
+  max-width: 540px;
+}
+
+.limit-success-banner {
+  background-color: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.limit-error-banner {
+  background-color: #FEE2E2;
+  color: #B91C1C;
+  border: 1px solid #FCA5A5;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.inline-limit-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inline-limit-input-group input {
+  padding-right: 55px !important;
+}
+
+.inline-limit-input-group .unit-suffix {
+  position: absolute;
+  right: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748B;
+  pointer-events: none;
+}
+
+.toast-notification-floating {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: #0F172A;
+  color: #FFFFFF;
+  padding: 14px 20px;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  z-index: 9999;
+  border-left: 4px solid #10B981;
+  animation: slideUpFade 0.25s ease-out;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
