@@ -89,12 +89,11 @@ export default function TaskCard({
         {onDeleteRequest && (
           <button
             type="button"
-            className="btn-action-delete"
+            className="btn-action-delete-text"
             onClick={() => onDeleteRequest(task.eventoId, task)}
             title="Eliminar gestión (activa modal de confirmación)"
-            style={{ color: '#DC2626' }}
           >
-            🗑️
+            Eliminar
           </button>
         )}
       </div>

@@ -3,6 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useEvents } from '../context/EventsContext';
 import SystemModal from '../components/SystemModal';
 import Button from '../components/Button';
+import {
+  HORAS_MAX_GESTION,
+  HORAS_MIN_GESTION,
+  LIMITE_JORNADA_DEFAULT,
+  LIMITE_JORNADA_MAX,
+  LIMITE_JORNADA_MIN,
+  bloquearTeclasNoNumericas,
+  horasPorJornada,
+  hoyIso,
+  jornadasExcedidas,
+  normalizarJornada,
+  validarHorasGestion,
+} from '../utils/validacionesHoras';
 
 /**
  * 2. Estándares para Formularios - Crear Evento
@@ -40,6 +53,8 @@ export default function CrearEvento() {
 
   const [nuevaSubtarea, setNuevaSubtarea] = useState('');
   const [nuevasHoras, setNuevasHoras] = useState(2);
+  const [nuevaFechaLimite, setNuevaFechaLimite] = useState('');
+  const [limiteJornada, setLimiteJornada] = useState(LIMITE_JORNADA_DEFAULT);
 
   // Errores de validación inline
   const [errors, setErrors] = useState({});
@@ -49,8 +64,9 @@ export default function CrearEvento() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdEventId, setCreatedEventId] = useState(null);
 
-  // Fecha de hoy en formato AAAA-MM-DD
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Fecha local de hoy (AAAA-MM-DD). toISOString() usa UTC y en Colombia
+  // devolvía el día siguiente después de las 7 p. m.
+  const todayStr = hoyIso();
 
   // Función de validación inline
   const validateField = (field, value) => {
@@ -80,9 +96,7 @@ export default function CrearEvento() {
         error = 'Este campo es obligatorio.';
       }
     } else if (field === 'nuevasHoras') {
-      if (Number(value) <= 0) {
-        error = 'Las horas estimadas de gestión deben ser mayores a 0.';
-      }
+      error = validarHorasGestion(value);
     }
 
     return error;
@@ -102,15 +116,42 @@ export default function CrearEvento() {
     }
   };
 
+  // Horas ya planificadas por jornada (para validar el límite diario en vivo)
+  const cargaPorJornada = horasPorJornada(subtareasPlan);
+  const excedidas = jornadasExcedidas(subtareasPlan, limiteJornada);
+
   const agregarSubtarea = (e) => {
     e.preventDefault();
-    const horasNum = Number(nuevasHoras);
-    if (horasNum <= 0) {
-      setErrors((prev) => ({ ...prev, nuevasHoras: 'Las horas estimadas de gestión deben ser mayores a 0.' }));
-      return;
-    }
+    const nuevosErrores = { nuevaSubtarea: '', nuevasHoras: '', nuevaFechaLimite: '' };
+
     if (!nuevaSubtarea.trim()) {
-      setErrors((prev) => ({ ...prev, nuevaSubtarea: 'Este campo es obligatorio.' }));
+      nuevosErrores.nuevaSubtarea = 'Este campo es obligatorio.';
+    }
+
+    nuevosErrores.nuevasHoras = validarHorasGestion(nuevasHoras);
+
+    // Si no se elige fecha, la gestión vence el día del evento (o hoy si aún no hay fecha)
+    const fechaGestion = nuevaFechaLimite || fecha || todayStr;
+    if (fechaGestion < todayStr) {
+      nuevosErrores.nuevaFechaLimite = 'La fecha límite no puede ser anterior a hoy.';
+    } else if (fecha && fechaGestion > fecha) {
+      nuevosErrores.nuevaFechaLimite = 'La gestión debe vencer antes o el mismo día del evento.';
+    }
+
+    // Validación dinámica del límite por jornada
+    const horasNum = Number(nuevasHoras);
+    if (!nuevosErrores.nuevasHoras && !nuevosErrores.nuevaFechaLimite) {
+      const yaAsignadas = cargaPorJornada[normalizarJornada(fechaGestion)] || 0;
+      if (yaAsignadas + horasNum > limiteJornada) {
+        const disponibles = Math.max(limiteJornada - yaAsignadas, 0);
+        nuevosErrores.nuevasHoras =
+          `Supera el límite de ${limiteJornada} h para el ${fechaGestion} ` +
+          `(ya hay ${yaAsignadas} h; disponibles: ${disponibles} h).`;
+      }
+    }
+
+    setErrors((prev) => ({ ...prev, ...nuevosErrores }));
+    if (nuevosErrores.nuevaSubtarea || nuevosErrores.nuevasHoras || nuevosErrores.nuevaFechaLimite) {
       return;
     }
 
@@ -120,13 +161,13 @@ export default function CrearEvento() {
         id: `plan-${Date.now()}`,
         titulo: nuevaSubtarea.trim(),
         horasEstimadas: horasNum,
-        fechaLimite: 'Próxima semana',
+        fechaLimite: fechaGestion,
         responsable: 'Equipo Logístico',
       },
     ]);
     setNuevaSubtarea('');
     setNuevasHoras(2);
-    setErrors((prev) => ({ ...prev, nuevaSubtarea: '', nuevasHoras: '' }));
+    setNuevaFechaLimite('');
   };
 
   const quitarSubtarea = (id) => {
@@ -141,17 +182,30 @@ export default function CrearEvento() {
     const errLugar = validateField('lugar', lugar);
     const errAsistentes = validateField('asistentes', asistentes);
 
+    // Validación del plan: ninguna jornada puede exceder el límite y ninguna
+    // gestión puede vencer después del evento (p. ej. si se cambió la fecha luego).
+    const gestionesFueraDeFecha = fecha
+      ? subtareasPlan.filter((s) => s.fechaLimite > fecha)
+      : [];
+    let errPlan = '';
+    if (excedidas.length > 0) {
+      errPlan = `Hay jornadas que superan el límite de ${limiteJornada} h. Ajusta las horas o las fechas antes de guardar.`;
+    } else if (gestionesFueraDeFecha.length > 0) {
+      errPlan = 'Hay gestiones que vencen después de la fecha del evento.';
+    }
+
     const newErrors = {
       nombre: errNombre,
       fecha: errFecha,
       lugar: errLugar,
       asistentes: errAsistentes,
+      plan: errPlan,
     };
 
-    setErrors(newErrors);
+    setErrors((prev) => ({ ...prev, ...newErrors }));
     setTouched({ nombre: true, fecha: true, lugar: true, asistentes: true });
 
-    if (errNombre || errFecha || errLugar || errAsistentes) {
+    if (errNombre || errFecha || errLugar || errAsistentes || errPlan) {
       return;
     }
 
@@ -366,15 +420,38 @@ export default function CrearEvento() {
               )}
             </div>
 
+            {/* Carga horaria por jornada (validación dinámica) */}
+            {subtareasPlan.length > 0 && (
+              <div className="jornada-load-list" aria-live="polite">
+                {Object.entries(cargaPorJornada).map(([jornada, horas]) => (
+                  <span
+                    key={jornada}
+                    className={`jornada-load-chip ${horas > limiteJornada ? 'is-over' : ''}`}
+                  >
+                    {jornada}: <strong>{horas} / {limiteJornada} h</strong>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {errors.plan && (
+              <span className="inline-error-text" role="alert" style={{ color: '#DC2626' }}>
+                {errors.plan}
+              </span>
+            )}
+
             {/* Agregar subtarea adicional */}
             <div className="add-subtask-quick-box">
               <div className="subtask-inputs-row">
                 <div className="form-field field-grow">
-                  <label className="form-label-sm">Nombre de la gestión</label>
+                  <label className="form-label-sm" htmlFor="nueva-gestion-nombre">
+                    Nombre de la gestión <span className="required-star" style={{ color: '#DC2626' }}>*</span>
+                  </label>
                   <input
+                    id="nueva-gestion-nombre"
                     type="text"
                     placeholder="Ej: Contratar ambientación musical y DJ"
-                    className="input-focus-active"
+                    className={`input-focus-active ${errors.nuevaSubtarea ? 'input-error-border' : ''}`}
                     value={nuevaSubtarea}
                     onChange={(e) => setNuevaSubtarea(e.target.value)}
                   />
@@ -386,21 +463,68 @@ export default function CrearEvento() {
                 </div>
 
                 <div className="form-field field-hours">
-                  <label className="form-label-sm">
+                  <label className="form-label-sm" htmlFor="nueva-gestion-horas">
                     Horas estimadas de gestión <span className="required-star" style={{ color: '#DC2626' }}>*</span>
                   </label>
                   <input
+                    id="nueva-gestion-horas"
                     type="number"
-                    min="1"
-                    className="input-focus-active"
+                    inputMode="decimal"
+                    min={HORAS_MIN_GESTION}
+                    max={HORAS_MAX_GESTION}
+                    step="0.5"
+                    className={`input-focus-active ${errors.nuevasHoras ? 'input-error-border' : ''}`}
                     value={nuevasHoras}
-                    onChange={(e) => setNuevasHoras(e.target.value)}
+                    onKeyDown={bloquearTeclasNoNumericas}
+                    onChange={(e) => handleChange('nuevasHoras', e.target.value, setNuevasHoras)}
+                    onBlur={(e) => handleBlur('nuevasHoras', e.target.value)}
                   />
                   {errors.nuevasHoras && (
                     <span className="inline-error-text" style={{ color: '#DC2626' }}>
                       {errors.nuevasHoras}
                     </span>
                   )}
+                </div>
+
+                <div className="form-field field-date">
+                  <label className="form-label-sm" htmlFor="nueva-gestion-fecha">
+                    Fecha límite
+                  </label>
+                  <input
+                    id="nueva-gestion-fecha"
+                    type="date"
+                    min={todayStr}
+                    max={fecha || undefined}
+                    className={`input-focus-active ${errors.nuevaFechaLimite ? 'input-error-border' : ''}`}
+                    value={nuevaFechaLimite}
+                    onChange={(e) => setNuevaFechaLimite(e.target.value)}
+                  />
+                  {errors.nuevaFechaLimite && (
+                    <span className="inline-error-text" style={{ color: '#DC2626' }}>
+                      {errors.nuevaFechaLimite}
+                    </span>
+                  )}
+                </div>
+
+                <div className="form-field field-limit">
+                  <label className="form-label-sm" htmlFor="limite-jornada">
+                    Límite por jornada (h)
+                  </label>
+                  <input
+                    id="limite-jornada"
+                    type="number"
+                    min={LIMITE_JORNADA_MIN}
+                    max={LIMITE_JORNADA_MAX}
+                    className="input-focus-active"
+                    value={limiteJornada}
+                    onKeyDown={bloquearTeclasNoNumericas}
+                    onChange={(e) => {
+                      const n = Math.round(Number(e.target.value));
+                      setLimiteJornada(
+                        Math.min(Math.max(n || LIMITE_JORNADA_MIN, LIMITE_JORNADA_MIN), LIMITE_JORNADA_MAX)
+                      );
+                    }}
+                  />
                 </div>
 
                 <div className="add-subtask-btn-wrapper">

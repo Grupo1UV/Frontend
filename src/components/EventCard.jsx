@@ -121,7 +121,6 @@ export default function EventCard({
               className="btn-action-delete-text"
               onClick={() => onDeleteRequest(evento)}
               title="Eliminar evento (activa modal de confirmación)"
-              style={{ color: '#DC2626' }}
             >
               Eliminar
             </button>

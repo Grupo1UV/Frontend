@@ -1,28 +1,17 @@
 import React, { useState } from 'react';
 import Button from './Button';
+import {
+  HORAS_MIN_GESTION,
+  HORAS_MAX_GESTION,
+  LIMITE_JORNADA_MIN,
+  LIMITE_JORNADA_MAX,
+  validarHorasGestion,
+  bloquearTeclasNoNumericas,
+  horasPorJornada,
+  jornadasExcedidas,
+  hoyIso,
+} from '../utils/validacionesHoras';
 
-/**
- * 2 & 5. Estándares para Formularios - EditEventForm
- *
- * Labels cortas, claras y siempre visibles:
- * - "Nombre del evento"
- * - "Fecha del evento"
- * - "Lugar"
- * - "Asistentes estimados"
- * - "Horas estimadas de gestión"
- *
- * Placeholders: Textos de ejemplo reales ("Ej: Boda Valentina & Emilio", "Ej: Centro de Eventos Valle del Lili").
- * Indicador Requerido: Asterisco rojo (*) en campos obligatorios (#DC2626).
- * Validaciones Inline (Texto Rojo #DC2626 debajo del campo):
- * - Campo vacío: "Este campo es obligatorio."
- * - Formato de fecha: "Ingresa una fecha válida (AAAA-MM-DD)."
- * - Lógica de eventos: "La fecha del evento debe ser posterior a la fecha actual."
- * - Lógica de gestión: "Las horas estimadas de gestión deben ser mayores a 0."
- *
- * CTAs explícitos:
- * - "Guardar cambios" (Azul #2563EB)
- * - "Cancelar" (Gris #64748B)
- */
 export default function EditEventForm({
   evento,
   onSave,
@@ -36,14 +25,14 @@ export default function EditEventForm({
     lugar: evento?.lugar || '',
     asistentes: evento?.asistentes !== undefined && evento?.asistentes !== '' ? evento.asistentes : '',
     descripcion: evento?.descripcion || '',
-    limiteHorasPorJornada: 6,
+    limiteHorasPorJornada: 8,
     subtareas: evento?.subtareas ? JSON.parse(JSON.stringify(evento.subtareas)) : [],
   }));
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = hoyIso();
 
   const validateField = (field, value) => {
     let error = '';
@@ -82,16 +71,9 @@ export default function EditEventForm({
     }
   };
 
-  // Validación de sobrecarga horaria en tiempo real
-  const horasPorFecha = formData.subtareas.reduce((acc, sub) => {
-    const f = sub.fechaLimite || 'Sin fecha';
-    acc[f] = (acc[f] || 0) + (Number(sub.horasEstimadas) || 0);
-    return acc;
-  }, {});
-
-  const fechasConConflicto = Object.entries(horasPorFecha).filter(
-    ([_fecha, horas]) => horas > formData.limiteHorasPorJornada
-  );
+  // Validación de sobrecarga horaria en tiempo real normalizando jornadas
+  const horasPorFecha = horasPorJornada(formData.subtareas);
+  const fechasConConflicto = jornadasExcedidas(formData.subtareas, formData.limiteHorasPorJornada);
   const tieneConflicto = fechasConConflicto.length > 0;
 
   const handleUpdateSubtask = (index, field, value) => {
@@ -105,14 +87,45 @@ export default function EditEventForm({
   const handleAddSubtask = () => {
     const nueva = {
       id: `sub-${Date.now()}`,
-      titulo: 'Nueva gestión logística',
+      titulo: '',
       horasEstimadas: 2,
-      fechaLimite: 'Hoy',
+      fechaLimite: formData.fecha || 'Hoy',
       estado: 'Pendiente',
       responsable: 'Equipo Operativo',
     };
     setFormData((prev) => ({ ...prev, subtareas: [...prev.subtareas, nueva] }));
   };
+
+  const handleDeleteSubtask = (idx, sub) => {
+    if (sub.id && String(sub.id).startsWith('sub-')) {
+      // Tarea local recién creada
+      setFormData((prev) => ({
+        ...prev,
+        subtareas: prev.subtareas.filter((_, i) => i !== idx),
+      }));
+      return;
+    }
+    if (onDeleteSubtask) {
+      onDeleteSubtask(sub);
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        subtareas: prev.subtareas.filter((_, i) => i !== idx),
+      }));
+    }
+  };
+
+  // Sincronizar subtareas si se eliminan a través del modal de confirmación en el padre
+  React.useEffect(() => {
+    if (evento?.subtareas) {
+      setFormData((prev) => ({
+        ...prev,
+        subtareas: prev.subtareas.filter(
+          (s) => evento.subtareas.some((es) => es.id === s.id) || String(s.id).startsWith('sub-')
+        ),
+      }));
+    }
+  }, [evento?.subtareas]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -122,17 +135,33 @@ export default function EditEventForm({
     const errLugar = validateField('lugar', formData.lugar);
     const errAsistentes = validateField('asistentes', formData.asistentes);
 
+    // Validar subtareas individuales
+    let hayErrorSubtarea = false;
+    formData.subtareas.forEach((sub) => {
+      if (validarHorasGestion(sub.horasEstimadas) || !sub.titulo || !sub.titulo.trim()) {
+        hayErrorSubtarea = true;
+      }
+    });
+
+    let errPlan = '';
+    if (tieneConflicto) {
+      errPlan = `Hay jornadas que superan el límite de ${formData.limiteHorasPorJornada} h. Ajusta las horas para continuar.`;
+    } else if (hayErrorSubtarea) {
+      errPlan = 'Verifica que todas las gestiones tengan nombre y horas válidas (0.5 a 12 h).';
+    }
+
     const newErrors = {
       nombre: errNombre,
       fecha: errFecha,
       lugar: errLugar,
       asistentes: errAsistentes,
+      plan: errPlan,
     };
 
     setErrors(newErrors);
     setTouched({ nombre: true, fecha: true, lugar: true, asistentes: true });
 
-    if (errNombre || errFecha || errLugar || errAsistentes) {
+    if (errNombre || errFecha || errLugar || errAsistentes || errPlan) {
       return;
     }
 
@@ -153,23 +182,22 @@ export default function EditEventForm({
         <div className="mode-indicator-content">
           <span className="mode-pulse-dot" style={{ backgroundColor: '#2563EB' }} />
           <div>
-            <strong>Modo "Editar / Reprogramar" (Formulario dinámico activo)</strong>
-            <p>Campos con Border Focus activo (#2563EB), detección de sobrecargas de jornada y CTAs explícitos.</p>
+            <strong>Editar y Reprogramar Evento</strong>
+            <p>Ajusta los detalles del evento, los límites operativos y la carga de cada gestión.</p>
           </div>
         </div>
 
         <button type="button" className="btn-switch-mode btn-mode-read" onClick={onCancel}>
-          👁️ Volver a Modo Lectura
+          ← Volver al Modo Lectura
         </button>
       </div>
 
       <div className="edit-form-card">
         <div className="edit-card-header">
-          <span className="badge-edit-active">Formulario Activo de Reprogramación</span>
-          <span className="edit-hint-focus">Inputs con Border Focus Activo (#2563EB)</span>
+          <span className="badge-edit-active">Edición Activa</span>
         </div>
 
-        <h2 className="edit-card-title">Edición del Evento y Límites Operativos</h2>
+        <h2 className="edit-card-title">Datos del Evento y Límites Operativos</h2>
 
         <div className="form-row">
           {/* Nombre del evento */}
@@ -398,17 +426,25 @@ export default function EditEventForm({
                   <div className="inline-hours-edit">
                     <input
                       type="number"
-                      min="1"
-                      max="24"
-                      className="input-focus-active"
+                      min={HORAS_MIN_GESTION}
+                      max={HORAS_MAX_GESTION}
+                      step="0.5"
+                      onKeyDown={bloquearTeclasNoNumericas}
+                      className={`input-focus-active ${validarHorasGestion(sub.horasEstimadas) ? 'input-error-border' : ''}`}
                       value={sub.horasEstimadas}
                       onChange={(e) => {
-                        const val = Number(e.target.value);
+                        const raw = e.target.value;
+                        const val = raw === '' ? '' : Number(raw);
                         handleUpdateSubtask(idx, 'horasEstimadas', val);
                       }}
                     />
                     <span className="unit-label">hrs</span>
                   </div>
+                  {validarHorasGestion(sub.horasEstimadas) && (
+                    <span className="inline-error-text" style={{ color: '#DC2626', fontSize: '0.75rem', marginTop: '2px' }}>
+                      {validarHorasGestion(sub.horasEstimadas)}
+                    </span>
+                  )}
                 </div>
 
                 <div className="form-field">
@@ -423,19 +459,16 @@ export default function EditEventForm({
                 </div>
               </div>
 
-              {onDeleteSubtask && (
-                <div className="edit-subtask-actions">
-                  <button
-                    type="button"
-                    className="btn-danger-icon"
-                    onClick={() => onDeleteSubtask(sub)}
-                    title="Eliminar gestión"
-                    style={{ color: '#DC2626' }}
-                  >
-                    🗑️
-                  </button>
-                </div>
-              )}
+              <div className="edit-subtask-actions">
+                <button
+                  type="button"
+                  className="btn-action-delete-text"
+                  onClick={() => handleDeleteSubtask(idx, sub)}
+                  title="Eliminar gestión"
+                >
+                  Eliminar
+                </button>
+              </div>
             </div>
           ))}
         </div>

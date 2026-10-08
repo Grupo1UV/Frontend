@@ -11,26 +11,29 @@ const BASE_URL =
     : 'http://localhost:8000/api';
 
 export function getAuthHeaders() {
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
   try {
     const stored = localStorage.getItem('eventify_user_auth_v1');
     if (stored) {
       const user = JSON.parse(stored);
       if (user?.token) {
-        return {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`,
-        };
+        headers['Authorization'] = `Bearer ${user.token}`;
       }
+      if (user?.uuid || user?.id) {
+        headers['X-User-Id'] = user.uuid || user.id;
+      }
+      return headers;
     }
   } catch (e) {
     console.warn('Error recuperando token de autenticación', e);
   }
 
   // Token de respaldo para entorno de evaluación
-  return {
-    'Content-Type': 'application/json',
-    Authorization: 'Bearer jwt_token_eventify_evaluacion_2026',
-  };
+  headers['Authorization'] = 'Bearer jwt_token_eventify_evaluacion_2026';
+  return headers;
 }
 
 export const api = {

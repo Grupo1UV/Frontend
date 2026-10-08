@@ -153,12 +153,11 @@ export default function EventDetail({
                 {onDeleteSubtask && (
                   <button
                     type="button"
-                    className="btn-danger-icon"
+                    className="btn-action-delete-text"
                     onClick={() => onDeleteSubtask(sub)}
                     title="Eliminar gestión"
-                    style={{ color: '#DC2626' }}
                   >
-                    🗑️
+                    Eliminar
                   </button>
                 )}
               </div>

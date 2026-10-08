@@ -75,19 +75,14 @@ const EVENTOS_INICIALES = [
   },
 ];
 
-export function EventsProvider({ children }) {
-  const [eventos, setEventos] = useState(() => {
-    try {
-      const stored = localStorage.getItem('organizador_eventos_data_v4');
-      if (stored) {
-        return JSON.parse(stored);
-      }
-    } catch (e) {
-      console.warn('Error reading from localStorage', e);
-    }
-    return EVENTOS_INICIALES;
-  });
+// Helper para clave de aislamiento en localStorage por usuario
+const getUserStorageKey = (user) => {
+  if (user?.uuid) return `eventify_events_${user.uuid}`;
+  if (user?.id) return `eventify_events_${user.id}`;
+  return 'eventify_events_guest';
+};
 
+export function EventsProvider({ children }) {
   // Estado de Autenticación de Usuario (Eventify Auth)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -97,6 +92,26 @@ export function EventsProvider({ children }) {
       console.warn('Error leyendo autenticación', e);
     }
     return null; // Obligatorio: Login es lo primero que debe aparecer
+  });
+
+  const [eventos, setEventos] = useState(() => {
+    try {
+      let initialUser = null;
+      const storedAuth = localStorage.getItem('eventify_user_auth_v1');
+      if (storedAuth) initialUser = JSON.parse(storedAuth);
+
+      const key = getUserStorageKey(initialUser);
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      if (initialUser?.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e') {
+        return EVENTOS_INICIALES;
+      }
+    } catch (e) {
+      console.warn('Error reading from localStorage', e);
+    }
+    return [];
   });
 
   const JWT_TOKEN_STANDALONE =
@@ -135,6 +150,7 @@ export function EventsProvider({ children }) {
 
   const logout = () => {
     setCurrentUser(null);
+    setEventos([]);
     localStorage.removeItem('access_token');
     localStorage.removeItem('token');
     localStorage.removeItem('auth_token');
@@ -147,21 +163,49 @@ export function EventsProvider({ children }) {
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [isLoadingCatering, setIsLoadingCatering] = useState(false);
 
-  // Sincronizar en localStorage
+  // Sincronizar en localStorage por clave aislada de usuario
   useEffect(() => {
+    if (!currentUser) return;
     try {
-      localStorage.setItem('organizador_eventos_data_v4', JSON.stringify(eventos));
+      const key = getUserStorageKey(currentUser);
+      localStorage.setItem(key, JSON.stringify(eventos));
     } catch (e) {
       console.warn('Error writing to localStorage', e);
     }
-  }, [eventos]);
+  }, [eventos, currentUser?.uuid]);
 
-  // Carga inicial y sincronización en tiempo real desde Supabase (US-47)
+  // Carga inicial y sincronización en tiempo real desde Supabase aislada por usuario
   useEffect(() => {
+    if (!currentUser) {
+      setEventos([]);
+      return;
+    }
+
+    const key = getUserStorageKey(currentUser);
+    const local = localStorage.getItem(key);
+    if (local) {
+      try {
+        setEventos(JSON.parse(local));
+      } catch (e) {
+        console.warn('Error parseando eventos locales del usuario:', e);
+      }
+    } else if (currentUser.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e') {
+      setEventos(EVENTOS_INICIALES);
+    } else {
+      setEventos([]);
+    }
+
     async function cargarDesdeSupabase() {
       try {
-        const { data: dbEvents, error: errEvt } = await supabase.from('events').select('*');
-        const { data: dbSubtasks, error: errSub } = await supabase.from('subtasks').select('*');
+        let query = supabase.from('events').select('*');
+        if (currentUser.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e') {
+          query = query.or(`user_id.eq.${currentUser.uuid},user_id.is.null`);
+        } else {
+          query = query.eq('user_id', currentUser.uuid);
+        }
+
+        const { data: dbEvents, error: errEvt } = await query;
+        const { data: dbSubtasks } = await supabase.from('subtasks').select('*');
 
         if (!errEvt && dbEvents && dbEvents.length > 0) {
           setEventos((prev) => {
@@ -184,6 +228,8 @@ export function EventsProvider({ children }) {
 
               return {
                 id: evt.id,
+                userId: evt.user_id,
+                user_id: evt.user_id,
                 nombre: evt.nombre,
                 tipo: evt.tipo,
                 fecha: evt.fecha,
@@ -206,7 +252,7 @@ export function EventsProvider({ children }) {
       }
     }
     cargarDesdeSupabase();
-  }, []);
+  }, [currentUser?.uuid]);
 
   // Cálculo de progreso de un evento (porcentaje exacto 0 - 100)
   const calcularProgreso = (evento) => {
@@ -255,8 +301,11 @@ export function EventsProvider({ children }) {
   // Crear un nuevo evento (T1)
   const crearEvento = (nuevoEvento) => {
     const id = `evt-${Date.now()}`;
+    const userUuid = currentUser?.uuid || '00260f2c-7cfb-411d-be11-61e1e2099d3e';
     const eventoCompleto = {
       id,
+      userId: userUuid,
+      user_id: userUuid,
       nombre: nuevoEvento.nombre,
       tipo: nuevoEvento.tipo || 'General',
       fecha: nuevoEvento.fecha,
@@ -273,6 +322,7 @@ export function EventsProvider({ children }) {
       try {
         const payloadConColumnas = {
           id: eventoCompleto.id,
+          user_id: userUuid,
           nombre: eventoCompleto.nombre,
           tipo: eventoCompleto.tipo,
           fecha: eventoCompleto.fecha,
@@ -287,6 +337,7 @@ export function EventsProvider({ children }) {
           // Si las columnas nuevas aún no existen en la BD, insertar con los campos base
           await supabase.from('events').insert({
             id: eventoCompleto.id,
+            user_id: userUuid,
             nombre: eventoCompleto.nombre,
             tipo: eventoCompleto.tipo,
             fecha: eventoCompleto.fecha,
