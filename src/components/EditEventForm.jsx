@@ -236,10 +236,6 @@ export default function EditEventForm({
   return (
     <form onSubmit={handleSubmit} className="edit-mode-container" noValidate>
       <div className="edit-form-card">
-        <div className="edit-card-header">
-          <span className="badge-edit-active">Edición Activa</span>
-        </div>
-
         <h2 className="edit-card-title">Datos del Evento y Límites Operativos</h2>
 
         <div className="form-row">
@@ -425,9 +421,15 @@ export default function EditEventForm({
             <h3 className="section-title">Reprogramar Subtareas Logísticas</h3>
             <p className="section-desc">Modifica fechas límites y horas estimadas con validación dinámica.</p>
           </div>
-          <Button variant="primary" onClick={handleAddSubtask}>
-            + Agregar gestión
-          </Button>
+          <button
+            type="button"
+            className="btn-add-subtask-compact"
+            onClick={handleAddSubtask}
+            title="Añadir nueva gestión logística"
+            aria-label="Añadir nueva gestión logística"
+          >
+            +
+          </button>
         </div>
 
         <div className="edit-subtasks-list">
