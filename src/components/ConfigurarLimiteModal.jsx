@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Button from './Button';
 import { useEvents } from '../context/EventsContext';
 import { bloquearTeclasNoNumericas } from '../utils/validacionesHoras';
+import api from '../services/api';
 
 /**
  * Modal para Configuración de Límite Diario de Horas (Sprint 3)
@@ -9,8 +10,8 @@ import { bloquearTeclasNoNumericas } from '../utils/validacionesHoras';
  * - Placeholder: "6 horas (por defecto)".
  * - Rango válido estricto: entre 1 y 16 horas.
  * - Mensajes reglamentarios:
- *   - Éxito: "Se cambió exitosamente el límite diario".
- *   - Error fuera de rango: "El valor debe estar entre 1 y 16 horas".
+ *   - Éxito exacto: "Límite actualizado".
+ *   - Error fuera de rango: "El valor debe estar entre 1 y 16".
  */
 export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
   const { limiteDiario, cambiarLimiteDiario } = useEvents();
@@ -28,14 +29,16 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
       setIsSaving(false);
 
       // Consulta del límite actual
-      api.getCapacity()
-        .then((res) => {
-          const val = res?.data?.limitHoursDay ?? res?.limitHoursDay ?? res?.data?.limiteDiario ?? res?.limiteDiario;
-          if (val) setValorInput(String(val));
-        })
-        .catch(() => {
-          setErrorMsg('No se pudo cargar el límite actual');
-        });
+      if (typeof api?.getCapacity === 'function') {
+        api.getCapacity()
+          .then((res) => {
+            const val = res?.data?.limitHoursDay ?? res?.limitHoursDay ?? res?.data?.limiteDiario ?? res?.limiteDiario;
+            if (val) setValorInput(String(val));
+          })
+          .catch(() => {
+            // Si no hay conexión o no existe perfil previo, conservar el límite local
+          });
+      }
 
       const timer = setTimeout(() => {
         if (inputRef.current) inputRef.current.focus();
@@ -61,22 +64,23 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (valorInput === '' || valorInput === null || valorInput === undefined) {
-      setErrorMsg('El valor debe estar entre 1 y 16');
-      return;
-    }
-
-    const n = Number(valorInput);
-    if (!Number.isFinite(n) || n < 1 || n > 16) {
-      setErrorMsg('El valor debe estar entre 1 y 16');
-      return;
+    let n = 6;
+    const trimmed = String(valorInput ?? '').trim();
+    if (trimmed === '') {
+      n = 6;
+    } else {
+      n = Number(trimmed);
+      if (!Number.isFinite(n) || n < 1 || n > 16) {
+        setErrorMsg('El valor debe estar entre 1 y 16');
+        return;
+      }
     }
 
     setIsSaving(true);
     try {
       const res = await cambiarLimiteDiario(n);
       if (res.ok) {
-        setSuccessMsg('Se cambió exitosamente el límite diario');
+        setSuccessMsg('Límite actualizado');
         setTimeout(() => {
           setIsSaving(false);
           onClose?.();

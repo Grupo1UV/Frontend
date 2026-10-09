@@ -170,12 +170,14 @@ export function EventsProvider({ children }) {
   // Límite diario de capacidad en horas (Sprint 3: 6 horas por defecto, rango 1-16)
   const [limiteDiario, setLimiteDiario] = useState(() => {
     try {
-      const stored = localStorage.getItem('eventify_limite_diario');
-      if (stored) {
-        const val = Number(stored);
-        if (Number.isFinite(val) && val >= 1 && val <= 16) {
-          return val;
-        }
+      const storedAuth = localStorage.getItem('eventify_user_auth_v1');
+      const user = storedAuth ? JSON.parse(storedAuth) : null;
+      const userKey = user?.uuid || user?.id;
+      const stored = userKey ? localStorage.getItem(`eventify_limite_diario_${userKey}`) : null;
+      const fallback = localStorage.getItem('eventify_limite_diario');
+      const val = Number(stored || fallback);
+      if (Number.isFinite(val) && val >= 1 && val <= 16) {
+        return val;
       }
     } catch (e) {
       console.warn('Error leyendo límite diario', e);
@@ -184,19 +186,29 @@ export function EventsProvider({ children }) {
   });
 
   const cambiarLimiteDiario = async (nuevoValor) => {
-    const val = Number(nuevoValor);
-    if (!Number.isFinite(val) || val < 1 || val > 16) {
-      return { ok: false, error: 'El valor debe estar entre 1 y 16 horas' };
+    let val = 6;
+    const trimmed = String(nuevoValor ?? '').trim();
+    if (trimmed === '') {
+      val = 6;
+    } else {
+      val = Number(trimmed);
+      if (!Number.isFinite(val) || val < 1 || val > 16) {
+        return { ok: false, error: 'El valor debe estar entre 1 y 16' };
+      }
     }
     const sanitized = Math.round(val * 10) / 10;
     setLimiteDiario(sanitized);
     try {
       localStorage.setItem('eventify_limite_diario', String(sanitized));
+      const userKey = currentUser?.uuid || currentUser?.id;
+      if (userKey) {
+        localStorage.setItem(`eventify_limite_diario_${userKey}`, String(sanitized));
+      }
       api.updateCapacity(sanitized).catch(() => {});
     } catch (e) {
       console.warn('Error guardando límite diario en localStorage', e);
     }
-    return { ok: true, mensaje: 'Se cambió exitosamente el límite diario' };
+    return { ok: true, mensaje: 'Límite actualizado', limite: sanitized };
   };
 
   // Sincronizar en localStorage por clave aislada de usuario

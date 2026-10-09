@@ -54,6 +54,11 @@ export function normalizarJornada(fecha) {
     d.setDate(d.getDate() + 1);
     return toIso(d);
   }
+  if (valor.toLowerCase() === 'próxima semana' || valor.toLowerCase() === 'proxima semana') {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return toIso(d);
+  }
   // Si viene en formato DD/MM/AAAA convertir a ISO para orden y agrupación uniforme
   const iso = displayDateToIso(valor);
   if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
@@ -76,9 +81,10 @@ export function validarHorasGestion(valor) {
   return '';
 }
 
-/** Suma las horas de las gestiones agrupadas por jornada normalizada. */
+/** Suma las horas de las gestiones pendientes agrupadas por jornada normalizada (excluye Hechas). */
 export function horasPorJornada(subtareas = []) {
   return subtareas.reduce((acc, sub) => {
+    if (sub.estado === 'Hecha') return acc;
     const jornada = normalizarJornada(sub.fechaLimite);
     acc[jornada] = (acc[jornada] || 0) + (Number(sub.horasEstimadas) || 0);
     return acc;

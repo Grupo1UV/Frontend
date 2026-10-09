@@ -86,19 +86,9 @@ export default function Hoy() {
   // Helper para normalizar la fecha límite a string ISO comparable
   const parseFechaLimite = (fechaStr) => {
     if (!fechaStr) return '9999-12-31';
-    if (fechaStr === 'Hoy') return todayIso;
-    if (fechaStr === 'Mañana') {
-      const tomorrow = new Date(fechaHoyDate);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      return tomorrow.toISOString().split('T')[0];
-    }
-    if (fechaStr === 'Próxima semana') {
-      const nextWeek = new Date(fechaHoyDate);
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      return nextWeek.toISOString().split('T')[0];
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
-      return fechaStr;
+    const norm = normalizarJornada(fechaStr);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(norm)) {
+      return norm;
     }
     return '9999-12-31';
   };
@@ -281,6 +271,8 @@ export default function Hoy() {
         title: 'Reprogramar',
         message: 'La fecha de la subtarea se actualizó correctamente.',
       });
+      setToastMessage('La fecha se guardó exitosamente.');
+      setTimeout(() => setToastMessage(''), 4500);
     } catch (err) {
       const overload = parseOverloadError(err);
       if (overload) {
@@ -305,6 +297,8 @@ export default function Hoy() {
         title: 'Error al actualizar',
         message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
       });
+      setToastMessage('Falla: no se pudo guardar la fecha.');
+      setTimeout(() => setToastMessage(''), 4500);
     } finally {
       setIsSavingTask(false);
     }
@@ -341,6 +335,8 @@ export default function Hoy() {
         title: 'Reprogramar',
         message: 'La fecha de la subtarea se actualizó correctamente.',
       });
+      setToastMessage('La fecha se guardó exitosamente.');
+      setTimeout(() => setToastMessage(''), 4500);
     } catch (err) {
       const overload = parseOverloadError(err);
       if (overload) {
@@ -364,6 +360,8 @@ export default function Hoy() {
         title: 'Error al actualizar',
         message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
       });
+      setToastMessage('Falla: no se pudo mover a la nueva fecha.');
+      setTimeout(() => setToastMessage(''), 4500);
     }
   };
 
@@ -382,6 +380,8 @@ export default function Hoy() {
         title: 'Horas reducidas',
         message: 'La fecha y las horas de la subtarea se actualizaron correctamente.',
       });
+      setToastMessage('Las horas estimadas se guardaron exitosamente.');
+      setTimeout(() => setToastMessage(''), 4500);
     } catch (err) {
       const overload = parseOverloadError(err);
       if (overload) {
@@ -402,6 +402,8 @@ export default function Hoy() {
         title: 'Error al actualizar',
         message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
       });
+      setToastMessage('Falla: no se pudieron actualizar las horas.');
+      setTimeout(() => setToastMessage(''), 4500);
     }
   };
 

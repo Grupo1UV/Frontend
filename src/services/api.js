@@ -5,10 +5,17 @@
  * las cabeceras (headers) de todas las peticiones hacia la API REST.
  */
 
-const BASE_URL =
-  process.env.NODE_ENV === 'production'
-    ? 'https://grupo1uv.onrender.com/api'
-    : 'http://localhost:8000/api';
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.__API_URL__) {
+    return window.__API_URL__;
+  }
+  const isProd =
+    (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'production') ||
+    (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
+  return isProd ? 'https://grupo1uv.onrender.com/api' : 'http://localhost:8000/api';
+};
+
+const BASE_URL = getBaseUrl();
 
 export function getAuthHeaders() {
   const headers = {
