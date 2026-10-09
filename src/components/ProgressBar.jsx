@@ -53,7 +53,7 @@ export default function ProgressBar({
     }
   } else if (safeProgress === 100) {
     barColor = '#16A34A'; // Verde (Éxito 100%)
-    statusName = 'Éxito: Planificación completada (100%)';
+    statusName = 'Planificación completada (100%)';
     badgeColorClass = 'badge-green';
     if (!dynamicSublabel) {
       dynamicSublabel = eventName
@@ -70,26 +70,26 @@ export default function ProgressBar({
     <div className={`progress-component progress-${size}`}>
       {showLabel && (
         <div className="progress-header">
-          <div className="progress-info">
+          <div className="progress-header-top">
             <span className="progress-percentage" style={{ color: barColor }}>
               {safeProgress}%
             </span>
-            {dynamicSublabel && (
-              <span className={`progress-sublabel ${hasCriticalError ? 'text-danger-error' : ''}`}>
-                {dynamicSublabel}
-              </span>
-            )}
+            <span
+              className={`progress-badge ${badgeColorClass}`}
+              style={{
+                backgroundColor: `${barColor}18`,
+                color: barColor,
+                borderColor: `${barColor}40`,
+              }}
+            >
+              {statusName}
+            </span>
           </div>
-          <span
-            className={`progress-badge ${badgeColorClass}`}
-            style={{
-              backgroundColor: `${barColor}18`,
-              color: barColor,
-              borderColor: `${barColor}40`,
-            }}
-          >
-            {statusName}
-          </span>
+          {dynamicSublabel && (
+            <span className={`progress-sublabel ${hasCriticalError ? 'text-danger-error' : ''}`}>
+              {dynamicSublabel}
+            </span>
+          )}
         </div>
       )}
 

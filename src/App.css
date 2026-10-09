@@ -334,9 +334,17 @@ a {
 
 .progress-header {
   display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.progress-header-top {
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .progress-info {
@@ -350,20 +358,30 @@ a {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .progress-sublabel {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .progress-badge {
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 700;
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
   border: 1px solid transparent;
   white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
 }
 
 .progress-track {
@@ -1610,6 +1628,8 @@ a {
   gap: 16px;
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .event-card-box:hover {
@@ -1669,6 +1689,8 @@ a {
   border: 1px solid #F1F5F9;
   border-radius: 10px;
   padding: 12px 14px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .critical-alert-box {
