@@ -61,6 +61,7 @@ export default function Hoy() {
     type: '',
     title: '',
     message: '',
+    itemName: '',
   });
   const [toastMessage, setToastMessage] = useState('');
 
@@ -268,8 +269,9 @@ export default function Hoy() {
       setNotificacionModal({
         isOpen: true,
         type: 'reprogramar_exito',
-        title: 'Reprogramar',
+        title: 'Fecha actualizada',
         message: 'La fecha de la subtarea se actualizó correctamente.',
+        itemName: task.titulo,
       });
       setToastMessage('La fecha se guardó exitosamente.');
       setTimeout(() => setToastMessage(''), 4500);
@@ -296,6 +298,7 @@ export default function Hoy() {
         type: 'error_actualizar',
         title: 'Error al actualizar',
         message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
+        itemName: task.titulo,
       });
       setToastMessage('Falla: no se pudo guardar la fecha.');
       setTimeout(() => setToastMessage(''), 4500);
@@ -311,57 +314,29 @@ export default function Hoy() {
     const totalConTarea = Math.round((horasExistentes + horasTarea) * 10) / 10;
 
     if (totalConTarea > limiteDiario) {
-      setConflictoState({
-        isOpen: true,
-        conflictoData: {
-          fecha: nuevaFechaIso,
-          fechaDisplay: nuevaFechaDisplay,
-          horasTotales: totalConTarea,
-          limiteDiario,
-          subtareas: [subtask],
-          subtareaAfectada: subtask,
-          eventoId: subtask.eventoId,
-        },
-      });
-      return;
+      return {
+        ok: false,
+        message: `La fecha destino (${nuevaFechaDisplay}) superaría tu límite diario: quedarías con ${totalConTarea}h (límite ${limiteDiario}h).`,
+      };
     }
 
     try {
       await reprogramarSubtarea(subtask.eventoId, subtask.id, nuevaFechaDisplay);
-      setConflictoState({ isOpen: false, conflictoData: null });
-      setNotificacionModal({
-        isOpen: true,
-        type: 'reprogramar_exito',
-        title: 'Reprogramar',
-        message: 'La fecha de la subtarea se actualizó correctamente.',
-      });
       setToastMessage('La fecha se guardó exitosamente.');
       setTimeout(() => setToastMessage(''), 4500);
+      return { ok: true };
     } catch (err) {
       const overload = parseOverloadError(err);
       if (overload) {
-        setConflictoState({
-          isOpen: true,
-          conflictoData: {
-            fecha: nuevaFechaIso,
-            fechaDisplay: nuevaFechaDisplay,
-            horasTotales: overload.horasTotales,
-            limiteDiario: overload.limiteDiario,
-            subtareas: [subtask],
-            subtareaAfectada: subtask,
-            eventoId: subtask.eventoId,
-          },
-        });
-        return;
+        return {
+          ok: false,
+          message: `Conflicto de sobrecarga en destino: quedarías con ${overload.horasTotales}h (límite ${overload.limiteDiario}h).`,
+        };
       }
-      setNotificacionModal({
-        isOpen: true,
-        type: 'error_actualizar',
-        title: 'Error al actualizar',
-        message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
-      });
-      setToastMessage('Falla: no se pudo mover a la nueva fecha.');
-      setTimeout(() => setToastMessage(''), 4500);
+      return {
+        ok: false,
+        message: 'Ha ocurrido un error al intentar actualizar la subtarea en el servidor.',
+      };
     }
   };
 
@@ -373,37 +348,21 @@ export default function Hoy() {
         const fechaDisp = conflictoState.conflictoData.fechaDisplay || isoToDisplayDate(conflictoState.conflictoData.fecha);
         await reprogramarSubtarea(subtask.eventoId, subtask.id, fechaDisp, nuevasHoras);
       }
-      setConflictoState({ isOpen: false, conflictoData: null });
-      setNotificacionModal({
-        isOpen: true,
-        type: 'horas_reducidas_exito',
-        title: 'Horas reducidas',
-        message: 'La fecha y las horas de la subtarea se actualizaron correctamente.',
-      });
       setToastMessage('Las horas estimadas se guardaron exitosamente.');
       setTimeout(() => setToastMessage(''), 4500);
+      return { ok: true };
     } catch (err) {
       const overload = parseOverloadError(err);
       if (overload) {
-        setConflictoState((prev) => ({
-          ...prev,
-          isOpen: true,
-          conflictoData: {
-            ...prev.conflictoData,
-            horasTotales: overload.horasTotales,
-            limiteDiario: overload.limiteDiario,
-          },
-        }));
-        return;
+        return {
+          ok: false,
+          message: `Conflicto de sobrecarga: quedarías con ${overload.horasTotales}h (límite ${overload.limiteDiario}h).`,
+        };
       }
-      setNotificacionModal({
-        isOpen: true,
-        type: 'error_actualizar',
-        title: 'Error al actualizar',
-        message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
-      });
-      setToastMessage('Falla: no se pudieron actualizar las horas.');
-      setTimeout(() => setToastMessage(''), 4500);
+      return {
+        ok: false,
+        message: 'Ha ocurrido un error al intentar actualizar las horas en el servidor.',
+      };
     }
   };
 
@@ -872,7 +831,8 @@ export default function Hoy() {
         type={notificacionModal.type}
         title={notificacionModal.title}
         message={notificacionModal.message}
-        onClose={() => setNotificacionModal({ isOpen: false, type: '', title: '', message: '' })}
+        itemName={notificacionModal.itemName}
+        onClose={() => setNotificacionModal({ isOpen: false, type: '', title: '', message: '', itemName: '' })}
       />
 
       {/* Toast Notificación Flotante */}

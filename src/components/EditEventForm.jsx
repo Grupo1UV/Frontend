@@ -150,7 +150,7 @@ export default function EditEventForm({
           : s
       ),
     }));
-    setConflictoModalData({ isOpen: false, conflicto: null });
+    return { ok: true };
   };
 
   // Sprint 3: Resolver conflicto de sobrecarga - Reducir horas estimadas
@@ -163,7 +163,7 @@ export default function EditEventForm({
           : s
       ),
     }));
-    setConflictoModalData({ isOpen: false, conflicto: null });
+    return { ok: true };
   };
 
   const handleSubmit = (e) => {
@@ -389,7 +389,7 @@ export default function EditEventForm({
         <div className="workload-conflict-alert" role="alert">
           <div className="conflict-alert-icon">⚠️</div>
           <div className="conflict-alert-body">
-            <h4>Alerta en Tiempo Real: Sobrecarga en la Planificación Diaria</h4>
+            <h4>Alerta: Sobrecarga en la Planificación Diaria</h4>
             <p>
               Se ha detectado conflicto en las siguientes fechas (límite: {formData.limiteHorasPorJornada} horas/día):
             </p>

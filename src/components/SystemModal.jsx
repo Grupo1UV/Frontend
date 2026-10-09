@@ -15,7 +15,8 @@ import Button from './Button';
  */
 export default function SystemModal({
   isOpen = false,
-  type = 'eliminar_evento', // 'eliminar_evento' | 'eliminar_tarea' | 'evento_guardado' | 'evento_eliminado' | 'tarea_editada' | 'tarea_eliminada' | 'error_operacional' | 'custom'
+  type = 'eliminar_evento', // 'eliminar_evento' | 'eliminar_tarea' | 'evento_guardado' | 'evento_eliminado' | 'tarea_editada' | 'tarea_eliminada' | 'error_operacional' | 'reprogramar_exito' | 'horas_reducidas_exito' | 'error_actualizar' | 'custom'
+  category = '', // 'risk' | 'success' | 'error'
   title = '',
   message = '',
   itemName = '',
@@ -24,13 +25,14 @@ export default function SystemModal({
   confirmText = '',
   cancelText = 'Cancelar',
   isLoading = false,
+  overlayClassName = '',
 }) {
   const cancelBtnRef = useRef(null);
 
   // Configuración de microcopy según el tipo solicitado en la Guía de Diseño
   let modalTitle = title;
   let modalText = message;
-  let modalCategory = 'risk'; // 'risk' | 'success' | 'error'
+  let modalCategory = category || 'risk'; // 'risk' | 'success' | 'error'
   let btnConfirmText = confirmText;
   let btnConfirmVariant = 'danger';
 
@@ -39,7 +41,7 @@ export default function SystemModal({
       modalTitle = title || '¿Eliminar evento?';
       modalText =
         message || 'Esta acción eliminará el evento y todas sus subtareas logísticas. No se puede deshacer.';
-      modalCategory = 'risk';
+      modalCategory = category || 'risk';
       btnConfirmText = confirmText || 'Eliminar';
       btnConfirmVariant = 'danger';
       break;
@@ -48,7 +50,7 @@ export default function SystemModal({
       modalTitle = title || '¿Eliminar gestión?';
       modalText =
         message || 'Esta acción eliminará la tarea logística y su presupuesto asociado. No se puede deshacer.';
-      modalCategory = 'risk';
+      modalCategory = category || 'risk';
       btnConfirmText = confirmText || 'Eliminar';
       btnConfirmVariant = 'danger';
       break;
@@ -56,7 +58,7 @@ export default function SystemModal({
     case 'evento_guardado':
       modalTitle = title || 'Evento Guardado';
       modalText = message || 'El evento ha sido guardado de manera exitosa.';
-      modalCategory = 'success';
+      modalCategory = category || 'success';
       btnConfirmText = confirmText || 'Aceptar';
       btnConfirmVariant = 'primary';
       break;
@@ -64,7 +66,7 @@ export default function SystemModal({
     case 'evento_eliminado':
       modalTitle = title || 'Evento Eliminado';
       modalText = message || 'El evento y sus gestiones logísticas han sido eliminados de manera exitosa.';
-      modalCategory = 'success';
+      modalCategory = category || 'success';
       btnConfirmText = confirmText || 'Aceptar';
       btnConfirmVariant = 'primary';
       break;
@@ -72,7 +74,7 @@ export default function SystemModal({
     case 'tarea_editada':
       modalTitle = title || 'Gestión Editada';
       modalText = message || 'La tarea logística ha sido editada de manera exitosa.';
-      modalCategory = 'success';
+      modalCategory = category || 'success';
       btnConfirmText = confirmText || 'Aceptar';
       btnConfirmVariant = 'primary';
       break;
@@ -80,7 +82,7 @@ export default function SystemModal({
     case 'tarea_eliminada':
       modalTitle = title || 'Gestión Eliminada';
       modalText = message || 'La tarea logística ha sido eliminada de manera exitosa.';
-      modalCategory = 'success';
+      modalCategory = category || 'success';
       btnConfirmText = confirmText || 'Aceptar';
       btnConfirmVariant = 'primary';
       break;
@@ -88,40 +90,45 @@ export default function SystemModal({
     case 'error_operacional':
       modalTitle = title || 'Error';
       modalText = message || 'Ha ocurrido un error procesando la solicitud en el evento, inténtelo de nuevo.';
-      modalCategory = 'error';
+      modalCategory = category || 'error';
       btnConfirmText = confirmText || 'Cerrar';
       btnConfirmVariant = 'danger';
       break;
 
     // Sprint 3: Módulo 4 - Modales de Notificación Explicit
     case 'reprogramar_exito':
-      modalTitle = title || 'Reprogramar';
+      modalTitle = title || 'Fecha actualizada';
       modalText = message || 'La fecha de la subtarea se actualizó correctamente.';
-      modalCategory = 'success';
+      modalCategory = category || 'success';
       btnConfirmText = confirmText || 'Aceptar';
-      btnConfirmVariant = 'primary';
+      btnConfirmVariant = 'success';
       break;
 
     case 'horas_reducidas_exito':
       modalTitle = title || 'Horas reducidas';
-      modalText = message || 'La fecha y las horas de la subtarea se actualizaron correctamente.';
-      modalCategory = 'success';
+      modalText = message || 'Las horas de la subtarea se actualizaron correctamente.';
+      modalCategory = category || 'success';
       btnConfirmText = confirmText || 'Aceptar';
-      btnConfirmVariant = 'primary';
+      btnConfirmVariant = 'success';
       break;
 
     case 'error_actualizar':
       modalTitle = title || 'Error al actualizar';
       modalText = message || 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.';
-      modalCategory = 'error';
+      modalCategory = category || 'error';
       btnConfirmText = confirmText || 'Aceptar';
       btnConfirmVariant = 'danger';
       break;
 
     default:
-      modalCategory = modalCategory || 'risk';
+      modalCategory = category || modalCategory || 'risk';
       btnConfirmText = confirmText || (modalCategory === 'risk' ? 'Eliminar' : 'Aceptar');
-      btnConfirmVariant = modalCategory === 'risk' || modalCategory === 'error' ? 'danger' : 'primary';
+      btnConfirmVariant =
+        modalCategory === 'success'
+          ? 'success'
+          : modalCategory === 'error' || modalCategory === 'risk'
+          ? 'danger'
+          : 'primary';
       break;
   }
 
@@ -152,7 +159,7 @@ export default function SystemModal({
 
   return (
     <div
-      className="modal-overlay-focus"
+      className={`modal-overlay-focus ${overlayClassName}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="system-modal-title"
@@ -207,7 +214,15 @@ export default function SystemModal({
         {/* Microcopy de advertencia o informe oficial */}
         <p
           id="system-modal-description"
-          className={`system-modal-message ${modalCategory === 'risk' ? 'msg-risk-highlight' : ''}`}
+          className={`system-modal-message ${
+            modalCategory === 'risk'
+              ? 'msg-risk-highlight'
+              : modalCategory === 'success'
+              ? 'msg-success-highlight'
+              : modalCategory === 'error'
+              ? 'msg-error-highlight'
+              : ''
+          }`}
         >
           {modalText}
         </p>

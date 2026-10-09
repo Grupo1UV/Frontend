@@ -227,7 +227,7 @@ export default function CrearEvento() {
     setNuevaSubtarea('');
     setNuevasHoras(2);
     setNuevaFechaLimite('');
-    setConflictoModalState({ isOpen: false, data: null });
+    return { ok: true };
   };
 
   // Sprint 3: Resolver conflicto en Crear Evento - Reducir horas estimadas
@@ -252,7 +252,7 @@ export default function CrearEvento() {
     setNuevaSubtarea('');
     setNuevasHoras(2);
     setNuevaFechaLimite('');
-    setConflictoModalState({ isOpen: false, data: null });
+    return { ok: true };
   };
 
   const handleSubmit = (e) => {

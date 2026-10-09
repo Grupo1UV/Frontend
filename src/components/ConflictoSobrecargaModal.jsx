@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from './Button';
 import DatePickerField from './DatePickerField';
+import SystemModal from './SystemModal';
 import {
   hoyIso,
   isoToDisplayDate,
@@ -54,6 +55,17 @@ export default function ConflictoSobrecargaModal({
   // Subtarea seleccionada para resolver
   const [subtareaSeleccionadaId, setSubtareaSeleccionadaId] = useState('');
 
+  // Modal de retroalimentación (Éxito / Error con bordes verdes/rojos y blur de fondo)
+  const [feedbackModal, setFeedbackModal] = useState({
+    isOpen: false,
+    type: 'reprogramar_exito',
+    category: 'success',
+    title: '',
+    message: '',
+    itemName: '',
+    onConfirm: null,
+  });
+
   const todayStr = hoyIso();
 
   useEffect(() => {
@@ -64,6 +76,15 @@ export default function ConflictoSobrecargaModal({
       setErrorReducir('');
       setSuccessReducir('');
       setIsSaving(false);
+      setFeedbackModal({
+        isOpen: false,
+        type: 'reprogramar_exito',
+        category: 'success',
+        title: '',
+        message: '',
+        itemName: '',
+        onConfirm: null,
+      });
 
       if (conflictoData?.subtareaAfectada?.id) {
         setSubtareaSeleccionadaId(conflictoData.subtareaAfectada.id);
@@ -96,62 +117,195 @@ export default function ConflictoSobrecargaModal({
   const margenDisponible = Math.max(0, Math.round((limiteDiario - horasOtras) * 10) / 10);
 
   // 1. Manejar confirmación de mover a otro día
-  const handleConfirmarMover = () => {
+  const handleConfirmarMover = async () => {
+    const nombreGestion = subtareaActiva.titulo || 'Gestión';
+
     if (!nuevaFecha) {
-      setErrorMover('Selecciona una nueva fecha válida.');
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: 'Debes seleccionar una nueva fecha límite para la gestión.',
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
     const iso = normalizarJornada(nuevaFecha);
     if (iso < todayStr) {
-      setErrorMover('La fecha seleccionada no puede ser anterior a hoy.');
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: 'La fecha seleccionada no puede ser anterior al día de hoy.',
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
     if (iso === normalizarJornada(fecha)) {
-      setErrorMover('Debes elegir una fecha distinta a la jornada con conflicto.');
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: 'Debes elegir una fecha distinta a la jornada con conflicto.',
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
 
     if (onResolverMover) {
-      setIsSaving(true);
-      onResolverMover(subtareaActiva, nuevaFecha, iso);
+      try {
+        setIsSaving(true);
+        const res = await onResolverMover(subtareaActiva, nuevaFecha, iso);
+        if (res && res.ok === false) {
+          setFeedbackModal({
+            isOpen: true,
+            type: 'error_actualizar',
+            category: 'error',
+            title: 'Error al actualizar',
+            message: res.message || 'No se pudo mover la gestión a la fecha seleccionada.',
+            itemName: nombreGestion,
+            onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+          });
+          return;
+        }
+
+        // Éxito al mover a otra fecha
+        setFeedbackModal({
+          isOpen: true,
+          type: 'reprogramar_exito',
+          category: 'success',
+          title: 'Fecha actualizada',
+          message: 'La fecha de la subtarea se actualizó correctamente.',
+          itemName: nombreGestion,
+          onConfirm: () => {
+            setFeedbackModal((prev) => ({ ...prev, isOpen: false }));
+            onClose?.();
+          },
+        });
+      } catch (err) {
+        setFeedbackModal({
+          isOpen: true,
+          type: 'error_actualizar',
+          category: 'error',
+          title: 'Error al actualizar',
+          message: err?.message || 'Ha ocurrido un error al intentar mover la fecha de la subtarea.',
+          itemName: nombreGestion,
+          onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   // 2. Manejar confirmación de reducción de horas
-  const handleConfirmarReducir = (e) => {
-    e.preventDefault();
-    setErrorReducir('');
-    setSuccessReducir('');
+  const handleConfirmarReducir = async (e) => {
+    if (e) e.preventDefault();
+    const nombreGestion = subtareaActiva.titulo || 'Gestión';
 
     if (nuevasHorasInput === '' || nuevasHorasInput === null) {
-      setErrorReducir('Ingresa un valor numérico para las nuevas horas.');
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: 'Ingresa un valor numérico para las nuevas horas estimadas.',
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
 
     const val = Number(nuevasHorasInput);
     if (!Number.isFinite(val) || val <= 0) {
-      setErrorReducir('Las horas deben ser mayores a 0.');
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: 'Las horas estimadas deben ser un valor mayor a 0.',
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
 
     if (val > margenDisponible) {
-      setErrorReducir(`No puedes asignar más de ${margenDisponible}h para no superar el límite de ${limiteDiario}h.`);
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: `No puedes asignar más de ${margenDisponible}h para no superar el límite de ${limiteDiario}h.`,
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
 
     if (Math.round(val * 2) !== val * 2) {
-      setErrorReducir('Usa intervalos de media hora (ej. 1, 1.5, 2).');
+      setFeedbackModal({
+        isOpen: true,
+        type: 'error_actualizar',
+        category: 'error',
+        title: 'Error al actualizar',
+        message: 'Usa intervalos de media hora (ej. 1, 1.5, 2).',
+        itemName: nombreGestion,
+        onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+      });
       return;
     }
 
-    setIsSaving(true);
-    setSuccessReducir('Las horas de la subtarea se actualizaron correctamente');
+    if (onResolverReducir) {
+      try {
+        setIsSaving(true);
+        const res = await onResolverReducir(subtareaActiva, val);
+        if (res && res.ok === false) {
+          setFeedbackModal({
+            isOpen: true,
+            type: 'error_actualizar',
+            category: 'error',
+            title: 'Error al actualizar',
+            message: res.message || 'No se pudieron actualizar las horas estimadas.',
+            itemName: nombreGestion,
+            onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+          });
+          return;
+        }
 
-    setTimeout(() => {
-      if (onResolverReducir) {
-        onResolverReducir(subtareaActiva, val);
+        // Éxito al reducir horas
+        setFeedbackModal({
+          isOpen: true,
+          type: 'horas_reducidas_exito',
+          category: 'success',
+          title: 'Horas reducidas',
+          message: 'Las horas de la subtarea se actualizaron correctamente.',
+          itemName: nombreGestion,
+          onConfirm: () => {
+            setFeedbackModal((prev) => ({ ...prev, isOpen: false }));
+            onClose?.();
+          },
+        });
+      } catch (err) {
+        setFeedbackModal({
+          isOpen: true,
+          type: 'error_actualizar',
+          category: 'error',
+          title: 'Error al actualizar',
+          message: err?.message || 'Ha ocurrido un error al intentar actualizar las horas de la subtarea.',
+          itemName: nombreGestion,
+          onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+        });
+      } finally {
+        setIsSaving(false);
       }
-    }, 700);
+    }
   };
 
   return (
@@ -338,7 +492,7 @@ export default function ConflictoSobrecargaModal({
                 onClick={handleConfirmarMover}
                 disabled={isSaving}
               >
-                {isSaving ? 'Guardando...' : 'Confirmar'}
+                {isSaving ? 'Guardando...' : 'Guardar'}
               </Button>
             </div>
           </>
@@ -451,6 +605,21 @@ export default function ConflictoSobrecargaModal({
           </form>
         )}
       </div>
+
+      {/* Modal de retroalimentación de confirmación o error (Sprint 3) */}
+      {feedbackModal.isOpen && (
+        <SystemModal
+          isOpen={feedbackModal.isOpen}
+          type={feedbackModal.type}
+          category={feedbackModal.category}
+          title={feedbackModal.title}
+          message={feedbackModal.message}
+          itemName={feedbackModal.itemName}
+          overlayClassName="modal-overlay-level-2"
+          onClose={feedbackModal.onConfirm}
+          onConfirm={feedbackModal.onConfirm}
+        />
+      )}
     </div>
   );
 }

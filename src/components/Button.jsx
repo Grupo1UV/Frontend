@@ -27,6 +27,12 @@ export default function Button({
           color: '#FFFFFF',
           border: '1px solid #2563EB',
         };
+      case 'success':
+        return {
+          backgroundColor: '#16A34A',
+          color: '#FFFFFF',
+          border: '1px solid #16A34A',
+        };
       case 'neutral':
         return {
           backgroundColor: '#F8FAFC',

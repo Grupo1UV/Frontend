@@ -2799,6 +2799,25 @@ a {
   outline-offset: 2px;
 }
 
+/* Botón Success: Verde #16A34A */
+.btn-success {
+  background-color: var(--green-success);
+  color: #FFFFFF !important;
+  border: 1.5px solid var(--green-success);
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #15803D;
+  border-color: #15803D;
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.35);
+}
+
+.btn-success:focus-visible {
+  outline: 3px solid rgba(22, 163, 74, 0.4);
+  outline-offset: 2px;
+}
+
 /* Botón Neutral: Gris #64748B */
 .btn-neutral {
   background-color: #F8FAFC;
@@ -2935,11 +2954,17 @@ a {
 }
 
 .modal-card-success {
-  border-top: 5px solid var(--green-success);
+  border: 2px solid var(--green-success) !important;
+  border-top: 5px solid var(--green-success) !important;
 }
 
 .modal-card-error {
-  border-top: 5px solid var(--red-critical);
+  border: 2px solid var(--red-critical) !important;
+  border-top: 5px solid var(--red-critical) !important;
+}
+
+.modal-overlay-level-2 {
+  z-index: 120 !important;
 }
 
 .system-modal-header {
@@ -2984,6 +3009,24 @@ a {
 }
 
 .msg-risk-highlight {
+  background-color: #FEF2F2;
+  border-left: 4px solid var(--red-critical);
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: #991B1B;
+  font-weight: 600;
+}
+
+.msg-success-highlight {
+  background-color: #F0FDF4;
+  border-left: 4px solid var(--green-success);
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.msg-error-highlight {
   background-color: #FEF2F2;
   border-left: 4px solid var(--red-critical);
   padding: 12px 14px;
