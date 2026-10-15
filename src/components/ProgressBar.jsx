@@ -21,49 +21,52 @@ export default function ProgressBar({
   eventName = '',
   completedCount = null,
   totalCount = null,
+  customPercentage = '',
+  statusLabel = '',
 }) {
   const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0));
 
-  let barColor = '#2563EB'; // Azul (Activo)
-  let statusName = `Activo (${safeProgress}%)`;
+  let barColor = '#2563EB'; // Azul (En curso)
+  let statusName = 'En curso';
   let badgeColorClass = 'badge-blue';
   let dynamicSublabel = sublabel;
 
   // Construir texto descriptivo si se proporcionan conteos
   if (completedCount !== null && totalCount !== null) {
     dynamicSublabel = eventName
-      ? `${completedCount} de ${totalCount} gestiones completadas en ${eventName}`
-      : `${completedCount} de ${totalCount} gestiones completadas`;
+      ? `${completedCount} de ${totalCount} subtareas completadas en ${eventName}`
+      : `${completedCount} de ${totalCount} subtareas completadas`;
   }
 
   if (hasCriticalError) {
-    barColor = '#DC2626'; // Rojo (Error)
-    statusName = 'Error en tareas logísticas';
+    barColor = '#DC2626'; // Rojo (Error / Alerta)
+    statusName = 'Atención requerida';
     badgeColorClass = 'badge-red';
-    // Microcopy exacto exigido en caso de fallo
     dynamicSublabel = 'No se han podido cargar las tareas logísticas.';
-  } else if (safeProgress === 0) {
-    barColor = '#16A34A'; // Verde (Base 0%)
-    statusName = 'Base: Plan listo (0%)';
-    badgeColorClass = 'badge-green';
-    if (!dynamicSublabel) {
-      dynamicSublabel = eventName
-        ? `0 de ${totalCount || 0} gestiones completadas en ${eventName}`
-        : 'Plan inicial listo para ejecutarse (0%)';
-    }
   } else if (safeProgress === 100) {
-    barColor = '#16A34A'; // Verde (Éxito 100%)
-    statusName = 'Planificación completada (100%)';
+    barColor = '#16A34A'; // Verde (Completado)
+    statusName = 'Completado';
     badgeColorClass = 'badge-green';
-    if (!dynamicSublabel) {
-      dynamicSublabel = eventName
-        ? `Todas las ${totalCount || completedCount || ''} gestiones completadas en ${eventName}`
-        : 'Planificación completada con éxito (100%)';
-    }
+  } else if (safeProgress === 0) {
+    barColor = '#16A34A'; // Verde (Plan inicial 0%)
+    statusName = 'Plan inicial';
+    badgeColorClass = 'badge-green';
   } else {
-    barColor = '#2563EB'; // Azul (Activo)
-    statusName = `Activo (${safeProgress}%)`;
+    barColor = '#2563EB'; // Azul (En curso)
+    statusName = 'En curso';
     badgeColorClass = 'badge-blue';
+  }
+
+  const finalStatus = statusLabel || statusName;
+
+  // Formato del porcentaje de avance independiente (ej. "28,6 % de progreso")
+  let formattedPercentage = '';
+  if (customPercentage) {
+    formattedPercentage = customPercentage.includes('de progreso')
+      ? customPercentage
+      : `${customPercentage} de progreso`;
+  } else {
+    formattedPercentage = `${safeProgress}% de progreso`;
   }
 
   return (
@@ -72,7 +75,7 @@ export default function ProgressBar({
         <div className="progress-header">
           <div className="progress-header-top">
             <span className="progress-percentage" style={{ color: barColor }}>
-              {safeProgress}%
+              {formattedPercentage}
             </span>
             <span
               className={`progress-badge ${badgeColorClass}`}
@@ -82,7 +85,7 @@ export default function ProgressBar({
                 borderColor: `${barColor}40`,
               }}
             >
-              {statusName}
+              {finalStatus}
             </span>
           </div>
           {dynamicSublabel && (
@@ -100,7 +103,7 @@ export default function ProgressBar({
         aria-valuenow={safeProgress}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={dynamicSublabel || `${safeProgress}% completado`}
+        aria-label={dynamicSublabel || `${formattedPercentage} • ${finalStatus}`}
       >
         <div
           className="progress-fill"

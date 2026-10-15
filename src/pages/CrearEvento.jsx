@@ -18,6 +18,7 @@ import {
   normalizarJornada,
   validarHorasGestion,
   isoToDisplayDate,
+  gestionVenceDespuesDeEvento,
 } from '../utils/validacionesHoras';
 
 /**
@@ -29,7 +30,7 @@ import {
  * - "Lugar"
  * - "Asistentes estimados"
  * - "Horas estimadas de gestión"
- *
+ *  
  * Placeholders: Textos de ejemplo reales ("Ej: Boda Valentina & Emilio", "Ej: Centro de Eventos Valle del Lili").
  * Indicador Requerido: Asterisco rojo (*) en campos obligatorios (#DC2626).
  * Validaciones Inline (Texto Rojo #DC2626 debajo del campo):
@@ -146,7 +147,7 @@ export default function CrearEvento() {
 
     if (fechaGestionIso < todayStr) {
       nuevosErrores.nuevaFechaLimite = 'La fecha límite no puede ser anterior a hoy.';
-    } else if (fecha && fechaGestionIso > fecha) {
+    } else if (fecha && gestionVenceDespuesDeEvento(fechaGestionIso, fecha)) {
       nuevosErrores.nuevaFechaLimite = 'La gestión debe vencer antes o el mismo día del evento.';
     }
 
@@ -282,7 +283,7 @@ export default function CrearEvento() {
     }
 
     const gestionesFueraDeFecha = fecha
-      ? subtareasPlan.filter((s) => s.fechaLimite > fecha)
+      ? subtareasPlan.filter((s) => gestionVenceDespuesDeEvento(s.fechaLimite, fecha))
       : [];
     let errPlan = '';
     if (gestionesFueraDeFecha.length > 0) {
@@ -311,14 +312,17 @@ export default function CrearEvento() {
       lugar: lugar.trim(),
       asistentes: Number(asistentes) || 1,
       descripcion: descripcion.trim(),
-      subtareas: subtareasPlan.map((s, index) => ({
-        id: `sub-${Date.now()}-${index}`,
-        titulo: s.titulo,
-        horasEstimadas: Number(s.horasEstimadas) || 1,
-        fechaLimite: s.fechaLimite,
-        estado: 'Pendiente',
-        responsable: s.responsable,
-      })),
+      subtareas: subtareasPlan.map((s, index) => {
+        const normFecha = normalizarJornada(s.fechaLimite);
+        return {
+          id: `sub-${Date.now()}-${index}`,
+          titulo: s.titulo,
+          horasEstimadas: Number(s.horasEstimadas) || 1,
+          fechaLimite: normFecha !== 'Sin fecha' ? normFecha : s.fechaLimite,
+          estado: 'Pendiente',
+          responsable: s.responsable,
+        };
+      }),
     });
 
     setCreatedEventId(nuevoId);

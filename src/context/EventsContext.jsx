@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { normalizarJornada } from '../utils/validacionesHoras';
-import api from '../services/api';
+import { api } from '../services/api';
 
 const EventsContext = createContext(null);
 
@@ -276,6 +276,7 @@ export function EventsProvider({ children }) {
                   horasEstimadas: s.horas_estimadas,
                   fechaLimite: s.fecha_limite,
                   estado: s.estado,
+                  nota: s.nota || '',
                   responsable: s.responsable,
                   isCatering: s.is_catering,
                   isCritical: s.is_critical,
@@ -309,13 +310,13 @@ export function EventsProvider({ children }) {
     cargarDesdeSupabase();
   }, [currentUser?.uuid]);
 
-  // Cálculo de progreso de un evento (porcentaje exacto 0 - 100)
+  // Cálculo de progreso de un evento (porcentaje exacto 0 - 100 con precisión de 1 decimal)
   const calcularProgreso = (evento) => {
-    if (!evento.subtareas || evento.subtareas.length === 0) return 0;
+    if (!evento || !evento.subtareas || evento.subtareas.length === 0) return 0;
     const completadas = evento.subtareas.filter((s) => s.estado === 'Hecha').length;
     const total = evento.subtareas.length;
-    const porcentaje = Math.round((completadas / total) * 1000) / 10; // Un decimal ej. 14.2% o redondeado
-    return porcentaje;
+    if (total === 0) return 0;
+    return Math.round((completadas / total) * 1000) / 10;
   };
 
   // Determinar color de barra de progreso según Decisión 1
@@ -473,9 +474,10 @@ export function EventsProvider({ children }) {
     supabase.from('events').delete().eq('id', id).then(() => {});
   };
 
-  // Marcar subtarea como hecha / pendiente (T4)
-  const marcarSubtareaHecha = (eventoId, subtareaId) => {
+  // Marcar subtarea como hecha / pendiente (C1 / US-16 / US-18)
+  const marcarSubtareaHecha = (eventoId, subtareaId, nota = null) => {
     let nuevoEstado = 'Hecha';
+    let notaAsignada = nota;
     setEventos((prev) =>
       prev.map((evt) => {
         if (evt.id !== eventoId) return evt;
@@ -484,32 +486,107 @@ export function EventsProvider({ children }) {
           subtareas: evt.subtareas.map((sub) => {
             if (sub.id === subtareaId) {
               nuevoEstado = sub.estado === 'Hecha' ? 'Pendiente' : 'Hecha';
-              return { ...sub, estado: nuevoEstado };
+              if (notaAsignada === null) {
+                notaAsignada = sub.nota || '';
+              }
+              return { ...sub, estado: nuevoEstado, nota: notaAsignada };
             }
             return sub;
           }),
         };
       })
     );
-    supabase.from('subtasks').update({ estado: nuevoEstado }).eq('id', subtareaId).then(() => {});
+
+    (async () => {
+      try {
+        const updatePayload = { estado: nuevoEstado };
+        if (notaAsignada !== null && notaAsignada !== undefined) {
+          updatePayload.nota = notaAsignada;
+        }
+        const { error } = await supabase.from('subtasks').update(updatePayload).eq('id', subtareaId);
+        if (error) {
+          await supabase.from('subtasks').update({ estado: nuevoEstado }).eq('id', subtareaId);
+        }
+      } catch (err) {
+        console.warn('Error en Supabase marcarSubtareaHecha:', err);
+      }
+
+      try {
+        await api.changeSubtaskStatus(subtareaId, {
+          estado: nuevoEstado,
+          nota: notaAsignada,
+        });
+      } catch (err) {
+        console.warn('Error en api.changeSubtaskStatus:', err);
+      }
+    })();
   };
 
-  // Posponer subtarea (Sprint 3: actualiza estado a 'POSTERGADA')
-  const posponerSubtarea = (eventoId, subtareaId, nuevaFecha = 'Próxima semana') => {
+  // Posponer subtarea (C1 / US-17 / US-18)
+  const posponerSubtarea = async (eventoId, subtareaId, nuevaFecha = null, nota = undefined) => {
+    let fechaFinal = null;
+    let notaFinal = null;
+
     setEventos((prev) =>
       prev.map((evt) => {
         if (evt.id !== eventoId) return evt;
         return {
           ...evt,
-          subtareas: evt.subtareas.map((sub) =>
-            sub.id === subtareaId
-              ? { ...sub, fechaLimite: nuevaFecha, estado: 'POSTERGADA' }
-              : sub
-          ),
+          subtareas: evt.subtareas.map((sub) => {
+            if (sub.id === subtareaId) {
+              fechaFinal = (nuevaFecha !== null && nuevaFecha !== undefined) ? nuevaFecha : sub.fechaLimite;
+              if (nota === undefined) {
+                notaFinal = sub.nota || '';
+              } else if (nota === null) {
+                notaFinal = '';
+              } else {
+                notaFinal = String(nota).trim();
+              }
+              return {
+                ...sub,
+                fechaLimite: fechaFinal,
+                estado: 'POSTERGADA',
+                nota: notaFinal,
+              };
+            }
+            return sub;
+          }),
         };
       })
     );
-    supabase.from('subtasks').update({ fecha_limite: nuevaFecha, estado: 'POSTERGADA' }).eq('id', subtareaId).then(() => {});
+
+    const updatePayload = {
+      estado: 'POSTERGADA',
+      ...(fechaFinal ? { fecha_limite: fechaFinal } : {}),
+      nota: notaFinal ?? '',
+    };
+
+    try {
+      const { error } = await supabase.from('subtasks').update(updatePayload).eq('id', subtareaId);
+      if (error) {
+        await supabase.from('subtasks').update({
+          estado: 'POSTERGADA',
+          ...(fechaFinal ? { fecha_limite: fechaFinal } : {}),
+        }).eq('id', subtareaId);
+      }
+    } catch (err) {
+      console.warn('Error en Supabase posponerSubtarea:', err);
+    }
+
+    try {
+      const res = await api.changeSubtaskStatus(subtareaId, {
+        estado: 'POSTERGADA',
+        ...(fechaFinal ? { fechaLimite: fechaFinal } : {}),
+        nota: notaFinal,
+      });
+      return { ok: true, data: res?.data || res };
+    } catch (err) {
+      console.warn('Error en api.changeSubtaskStatus (posponer):', err);
+      if (err.status === 409 || err.error === 'overload_conflict' || err.data?.error === 'overload_conflict') {
+        throw err;
+      }
+      return { ok: true, fallback: true };
+    }
   };
 
   // Reprogramar subtarea (Sprint 3: Actualiza fecha y estado automáticamente a 'POSTERGADA')

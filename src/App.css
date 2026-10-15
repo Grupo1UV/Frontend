@@ -853,6 +853,13 @@ a {
   gap: 24px;
 }
 
+.read-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .read-header-card {
   background-color: #FFFFFF;
   border: 1px solid var(--border-line);
@@ -2930,8 +2937,15 @@ a {
 
 .badge-postergada {
   background-color: #FEF3C7;
-  color: #B45309;
+  color: #92400E;
   border: 1px solid #FCD34D;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* 4. Modales del Sistema */
@@ -2961,6 +2975,11 @@ a {
 .modal-card-error {
   border: 2px solid var(--red-critical) !important;
   border-top: 5px solid var(--red-critical) !important;
+}
+
+.modal-card-connection {
+  border: 2px solid #BFDBFE !important;
+  border-top: 5px solid #2563EB !important;
 }
 
 .modal-overlay-level-2 {
@@ -3089,12 +3108,11 @@ a {
 /* EVENTIFY BRANDING & LOGIN PAGE STYLES                                     */
 /* ========================================================================= */
 .brand-logo-image {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  object-fit: cover;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
-  background-color: #FFFFFF;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.22));
 }
 
 .nav-login-btn {
@@ -3998,4 +4016,72 @@ a {
   color: #475569;
   font-weight: 600;
   margin: 0;
+}
+
+/* ========================================================================= */
+/* RESUMEN GLOBAL DE PROGRESO Y SUBTAREAS (Sprint 4)                         */
+/* ========================================================================= */
+.global-progress-panel {
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-line);
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.global-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.global-progress-kpis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.global-kpi-card {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.global-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.global-kpi-tag {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.global-kpi-num {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0F172A;
+  line-height: 1.2;
+}
+
+.global-kpi-desc {
+  font-size: 0.78rem;
+  color: #64748B;
+  margin-top: 2px;
 }

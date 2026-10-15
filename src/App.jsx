@@ -96,6 +96,14 @@ function MainAppLayout() {
             }
           />
           <Route
+            path="/crear"
+            element={
+              <ProtectedRoute>
+                <CrearEvento />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/evento/:id"
             element={
               <ProtectedRoute>

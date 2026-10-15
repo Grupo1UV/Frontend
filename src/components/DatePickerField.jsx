@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { hoyIso, isoToDisplayDate, displayDateToIso } from '../utils/validacionesHoras';
+import { hoyIso, isoToDisplayDate, displayDateToIso, normalizarJornada } from '../utils/validacionesHoras';
 
 /**
  * Componente Selector de Fecha con Picker Interactivo (Eventify)
@@ -27,6 +27,9 @@ export default function DatePickerField({
       ? value
       : displayDateToIso(value)
     : '';
+
+  const minIso = min ? normalizarJornada(min) : hoyIso();
+  const maxIso = max ? normalizarJornada(max) : undefined;
 
   // Asegurar formato estricto DD/MM/AAAA para la visualización en el input
   const displayValue = value
@@ -96,8 +99,8 @@ export default function DatePickerField({
       <input
         ref={nativeDateRef}
         type="date"
-        min={min || hoyIso()}
-        max={max || undefined}
+        min={minIso && /^\d{4}-\d{2}-\d{2}$/.test(minIso) ? minIso : hoyIso()}
+        max={maxIso && /^\d{4}-\d{2}-\d{2}$/.test(maxIso) ? maxIso : undefined}
         value={isoValue}
         onChange={handleDateChange}
         className="datepicker-native-hidden"

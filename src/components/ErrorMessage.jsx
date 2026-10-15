@@ -35,7 +35,7 @@ export default function ErrorMessage({
   // =========================================================================
   if (variant === 'global') {
     const globalMessage =
-      message || 'Ha ocurrido un error cargando la información de los eventos, inténtelo de nuevo.';
+      message || 'Hubo un problema de conexión al obtener tus datos. Verifica tu conexión a Internet o intenta recargar la página';
 
     return (
       <div className="global-error-container" role="alert" aria-live="assertive" data-decision="decision-3-global">
@@ -45,7 +45,7 @@ export default function ErrorMessage({
             <span className="global-exclamation-mark">!</span>
           </div>
 
-          <div className="global-error-badge">Falla de API / Servidor</div>
+          <div className="global-error-badge">Problema de conexión</div>
 
           {/* Microcopy oficial */}
           <h2 className="global-error-title">{globalMessage}</h2>

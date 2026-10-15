@@ -15,6 +15,7 @@ import {
   hoyIso,
   normalizarJornada,
   isoToDisplayDate,
+  gestionVenceDespuesDeEvento,
 } from '../utils/validacionesHoras';
 
 export default function EditEventForm({
@@ -202,9 +203,16 @@ export default function EditEventForm({
       return;
     }
 
+    // Validar que ninguna gestión venza después de la fecha del evento
+    const gestionesFueraDeFecha = formData.fecha
+      ? formData.subtareas.filter((s) => gestionVenceDespuesDeEvento(s.fechaLimite, formData.fecha))
+      : [];
+
     let errPlan = '';
     if (hayErrorSubtarea) {
       errPlan = 'Verifica que todas las gestiones tengan nombre y horas válidas (0.5 a 12 h).';
+    } else if (gestionesFueraDeFecha.length > 0) {
+      errPlan = 'Hay gestiones que vencen después de la fecha del evento.';
     }
 
     const newErrors = {
@@ -229,7 +237,13 @@ export default function EditEventForm({
       lugar: formData.lugar.trim(),
       asistentes: Number(formData.asistentes) || 1,
       descripcion: formData.descripcion.trim(),
-      subtareas: formData.subtareas,
+      subtareas: formData.subtareas.map((s) => {
+        const normFecha = normalizarJornada(s.fechaLimite);
+        return {
+          ...s,
+          fechaLimite: normFecha !== 'Sin fecha' ? normFecha : s.fechaLimite,
+        };
+      }),
     });
   };
 
@@ -431,6 +445,25 @@ export default function EditEventForm({
             +
           </button>
         </div>
+
+        {errors.plan && (
+          <div
+            className="plan-error-alert"
+            role="alert"
+            style={{
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #F87171',
+              color: '#DC2626',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              marginBottom: '14px',
+              fontSize: '0.88rem',
+              fontWeight: 600,
+            }}
+          >
+            ⚠️ {errors.plan}
+          </div>
+        )}
 
         <div className="edit-subtasks-list">
           {formData.subtareas.map((sub, idx) => (

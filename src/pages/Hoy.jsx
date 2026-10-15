@@ -366,6 +366,25 @@ export default function Hoy() {
     }
   };
 
+  // Sprint 4: Acción unificada de Posponer con nota opcional y confirmación que identifica la actividad y el evento
+  const handlePosponerSubtarea = async (eventoId, subtareaId, notaTexto, taskObj) => {
+    try {
+      await posponerSubtarea(eventoId, subtareaId, null, notaTexto);
+      const evNombre = taskObj?.eventoNombre || eventos.find((e) => e.id === eventoId)?.nombre || 'Evento';
+      const taskNombre = taskObj?.titulo || 'Actividad';
+      const tieneNota = notaTexto !== undefined && notaTexto !== null && String(notaTexto).trim() !== '';
+      const msg = tieneNota
+        ? `Nota guardada correctamente. Actividad: ${taskNombre}. Evento: ${evNombre}`
+        : `Actividad pospuesta correctamente. Actividad: ${taskNombre}. Evento: ${evNombre}`;
+      setToastMessage(msg);
+      setTimeout(() => setToastMessage(''), 5000);
+      return { ok: true };
+    } catch (err) {
+      console.error('Error posponiendo actividad:', err);
+      throw err;
+    }
+  };
+
   // Error Global Crítico
   if (hasGlobalError) {
     return (
@@ -373,7 +392,7 @@ export default function Hoy() {
         <ErrorMessage
           hasError={hasGlobalError}
           isGlobal={true}
-          message="Ha ocurrido un error cargando la información de los eventos, inténtelo de nuevo."
+          message="Hubo un problema de conexión al obtener tus datos. Verifica tu conexión a Internet o intenta recargar la página"
           onRetry={reintentarGlobal}
         />
       </div>
@@ -613,7 +632,7 @@ export default function Hoy() {
                       key={task.id}
                       task={task}
                       onComplete={marcarSubtareaHecha}
-                      onSnooze={posponerSubtarea}
+                      onSnooze={handlePosponerSubtarea}
                       onReprogram={handleAbrirReprogramar}
                       onDeleteRequest={handleRequestDeleteTask}
                     />
@@ -658,7 +677,7 @@ export default function Hoy() {
                     key={task.id}
                     task={task}
                     onComplete={marcarSubtareaHecha}
-                    onSnooze={posponerSubtarea}
+                    onSnooze={handlePosponerSubtarea}
                     onReprogram={handleAbrirReprogramar}
                     onDeleteRequest={handleRequestDeleteTask}
                   />
@@ -693,7 +712,7 @@ export default function Hoy() {
                     key={task.id}
                     task={task}
                     onComplete={marcarSubtareaHecha}
-                    onSnooze={posponerSubtarea}
+                    onSnooze={handlePosponerSubtarea}
                     onReprogram={handleAbrirReprogramar}
                     onDeleteRequest={handleRequestDeleteTask}
                   />
@@ -728,7 +747,7 @@ export default function Hoy() {
                     key={task.id}
                     task={task}
                     onComplete={marcarSubtareaHecha}
-                    onSnooze={posponerSubtarea}
+                    onSnooze={handlePosponerSubtarea}
                     onReprogram={handleAbrirReprogramar}
                     onDeleteRequest={handleRequestDeleteTask}
                   />

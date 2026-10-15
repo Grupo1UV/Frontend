@@ -9,10 +9,13 @@ const getBaseUrl = () => {
   if (typeof window !== 'undefined' && window.__API_URL__) {
     return window.__API_URL__;
   }
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
   const isProd =
     (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'production') ||
     (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
-  return isProd ? 'https://grupo1uv.onrender.com/api' : 'http://localhost:8000/api';
+  return isProd ? 'https://grupo1uv.onrender.com/api' : 'http://localhost:3000/api';
 };
 
 const BASE_URL = getBaseUrl();
@@ -122,9 +125,40 @@ export const api = {
     return data;
   },
 
+  async changeSubtaskStatus(subtaskId, { estado, nota, fechaLimite } = {}) {
+    const payload = {};
+    if (estado !== undefined) payload.estado = estado;
+    if (nota !== undefined) payload.nota = nota;
+    if (fechaLimite !== undefined) payload.fechaLimite = fechaLimite;
+
+    const res = await this.patch(`/subtareas/${subtaskId}/estado`, payload);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || 'Error al actualizar el estado de la subtarea');
+      err.status = res.status;
+      err.error = data.error;
+      err.code = data.code;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  },
+
+  async getEventProgress(eventId) {
+    const res = await this.get(`/eventos/${eventId}/progreso`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.message || 'Error al obtener progreso');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  },
+
   async getSubtasksToday(params = '') {
     return this.get(`/subtasks/today${params ? `?${params}` : ''}`);
   },
 };
 
 export default api;
+

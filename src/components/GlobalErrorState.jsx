@@ -16,8 +16,8 @@ import React from 'react';
 export default function GlobalErrorState({
   onRetry,
   isLoading = false,
-  message = 'Falla de Conexión con el Servidor Django REST API',
-  details = 'No se pudo establecer comunicación con el backend Django REST API ni sincronizar la base de datos central. Verifica tu conexión a la red local o el estado del servicio en el puerto correspondiente.',
+  message = 'Problema de conexión',
+  details = 'Hubo un problema de conexión al obtener tus datos. Verifica tu conexión a Internet o intenta recargar la página',
 }) {
   return (
     <div className="global-error-container" role="alert" aria-live="assertive">
@@ -40,7 +40,7 @@ export default function GlobalErrorState({
           </svg>
         </div>
 
-        <div className="global-error-badge">Error Global del Sistema (503 / Network Error)</div>
+        <div className="global-error-badge">Problema de conexión</div>
         <h2 className="global-error-title">{message}</h2>
         <p className="global-error-description">{details}</p>
 

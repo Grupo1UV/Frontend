@@ -129,6 +129,11 @@ export default function EventDetail({
                     <span className="subtask-tag-pill">⏱️ {sub.horasEstimadas} hrs</span>
                     <span className="subtask-tag-pill">👤 {sub.responsable || 'No asignado'}</span>
                   </div>
+                  {sub.nota && (
+                    <p className="read-subtask-note" style={{ marginTop: '6px', fontSize: '0.82rem', color: '#475569', background: '#f8fafc', padding: '2px 8px', borderRadius: '4px', borderLeft: '3px solid #2563eb' }}>
+                      <strong>Nota:</strong> {sub.nota}
+                    </p>
+                  )}
                 </div>
               </div>
 
