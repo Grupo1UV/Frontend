@@ -66,7 +66,7 @@ export default function ProgressBar({
       ? customPercentage
       : `${customPercentage} de progreso`;
   } else {
-    formattedPercentage = `${safeProgress}% de progreso`;
+    formattedPercentage = `${Math.round(safeProgress)} % de progreso`;
   }
 
   return (

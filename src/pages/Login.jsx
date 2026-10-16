@@ -143,7 +143,8 @@ export default function Login({ initialMode = 'login' }) {
             .limit(1);
 
           if (!dbError && dbUsers && dbUsers.length > 0) {
-            userFound = dbUsers[0];
+            const rawUser = dbUsers[0];
+            userFound = { ...rawUser, uuid: rawUser.uuid || rawUser.id };
           }
         } catch (dbEx) {
           console.warn('Consulta en Supabase app_users:', dbEx);
@@ -158,7 +159,7 @@ export default function Login({ initialMode = 'login' }) {
             (u) => u.usuario.toLowerCase() === cleanUser || u.email.toLowerCase() === cleanUser
           );
           if (foundLocal) {
-            userFound = foundLocal;
+            userFound = { ...foundLocal, uuid: foundLocal.uuid || foundLocal.id };
           }
         } catch (localEx) {
           console.warn('Consulta en usuarios locales:', localEx);
@@ -297,6 +298,7 @@ export default function Login({ initialMode = 'login' }) {
 
       const newUserData = {
         id: newUserId,
+        uuid: newUserId,
         nombre: cleanNombre,
         usuario: cleanUser,
         email: cleanEmail,

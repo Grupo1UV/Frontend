@@ -89,7 +89,25 @@ export function EventsProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const stored = localStorage.getItem('eventify_user_auth_v1');
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Sanitizar si era una cuenta que no es Juan Esteban pero tenía el UUID demo asignado por error
+        if (
+          parsed?.email &&
+          parsed.email.toLowerCase() !== 'juanesteban@valle.co' &&
+          parsed.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e'
+        ) {
+          const correctedId = (parsed.id && parsed.id !== '00260f2c-7cfb-411d-be11-61e1e2099d3e')
+            ? parsed.id
+            : `usr-${parsed.email.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+          parsed.uuid = correctedId;
+          parsed.id = correctedId;
+          try {
+            localStorage.setItem('eventify_user_auth_v1', JSON.stringify(parsed));
+          } catch {}
+        }
+        return parsed;
+      }
     } catch (e) {
       console.warn('Error leyendo autenticación', e);
     }
@@ -100,14 +118,27 @@ export function EventsProvider({ children }) {
     try {
       let initialUser = null;
       const storedAuth = localStorage.getItem('eventify_user_auth_v1');
-      if (storedAuth) initialUser = JSON.parse(storedAuth);
+      if (storedAuth) {
+        initialUser = JSON.parse(storedAuth);
+        if (
+          initialUser?.email &&
+          initialUser.email.toLowerCase() !== 'juanesteban@valle.co' &&
+          initialUser.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e'
+        ) {
+          initialUser.uuid = initialUser.id || `usr-${initialUser.email.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+        }
+      }
 
       const key = getUserStorageKey(initialUser);
       const stored = localStorage.getItem(key);
       if (stored) {
         return JSON.parse(stored);
       }
-      if (initialUser?.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e') {
+      const isJuanEstebanDemo =
+        initialUser?.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e' &&
+        initialUser?.email?.toLowerCase() === 'juanesteban@valle.co';
+
+      if (isJuanEstebanDemo) {
         return EVENTOS_INICIALES;
       }
     } catch (e) {
@@ -131,13 +162,22 @@ export function EventsProvider({ children }) {
 
   const login = (email, password, rememberMe = true, customUserData = null) => {
     const activeToken = JWT_TOKEN_STANDALONE;
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
+    const resolvedId = customUserData?.uuid || customUserData?.id;
+    const fallbackId = (cleanEmail === 'juanesteban@valle.co')
+      ? '00260f2c-7cfb-411d-be11-61e1e2099d3e'
+      : (cleanEmail ? `usr-${cleanEmail.replace(/[^a-z0-9]/g, '-')}` : 'usr-invitado');
+
+    const effectiveId = resolvedId || fallbackId;
+
     const user = {
+      id: effectiveId,
+      uuid: effectiveId,
       nombre: customUserData?.nombre || (email ? email.split('@')[0] : 'Organizador'),
       email: email || 'organizador@valle.co',
       rol: customUserData?.rol || 'Organizador Independiente',
       token: activeToken,
       isLoggedIn: true,
-      uuid: customUserData?.uuid || '00260f2c-7cfb-411d-be11-61e1e2099d3e',
     };
     setCurrentUser(user);
     // Claves visibles directamente en DevTools -> Application -> Local Storage
@@ -220,7 +260,7 @@ export function EventsProvider({ children }) {
     } catch (e) {
       console.warn('Error writing to localStorage', e);
     }
-  }, [eventos, currentUser?.uuid]);
+  }, [eventos, currentUser?.uuid, currentUser?.id]);
 
   // Carga inicial y sincronización en tiempo real desde Supabase aislada por usuario
   useEffect(() => {
@@ -233,13 +273,17 @@ export function EventsProvider({ children }) {
     setIsLoadingPlanning(true);
     const key = getUserStorageKey(currentUser);
     const local = localStorage.getItem(key);
+    const isJuanEstebanDemo =
+      currentUser?.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e' &&
+      currentUser?.email?.toLowerCase() === 'juanesteban@valle.co';
+
     if (local) {
       try {
         setEventos(JSON.parse(local));
       } catch (e) {
         console.warn('Error parseando eventos locales del usuario:', e);
       }
-    } else if (currentUser.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e') {
+    } else if (isJuanEstebanDemo) {
       setEventos(EVENTOS_INICIALES);
     } else {
       setEventos([]);
@@ -252,71 +296,77 @@ export function EventsProvider({ children }) {
 
     async function cargarDesdeSupabase() {
       try {
+        const userUuid = currentUser.uuid || currentUser.id;
         let query = supabase.from('events').select('*');
-        if (currentUser.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e') {
-          query = query.or(`user_id.eq.${currentUser.uuid},user_id.is.null`);
+        if (isJuanEstebanDemo) {
+          query = query.or(`user_id.eq.${userUuid},user_id.is.null`);
         } else {
-          query = query.eq('user_id', currentUser.uuid);
+          query = query.eq('user_id', userUuid);
         }
 
         const { data: dbEvents, error: errEvt } = await query;
         const { data: dbSubtasks } = await supabase.from('subtasks').select('*');
 
-        if (!errEvt && dbEvents && dbEvents.length > 0) {
-          setEventos((prev) => {
-            const prevMap = new Map(prev.map((e) => [e.id, e]));
+        if (!errEvt && dbEvents) {
+          if (dbEvents.length > 0) {
+            setEventos((prev) => {
+              const prevMap = new Map(prev.map((e) => [e.id, e]));
 
-            return dbEvents.map((evt) => {
-              const existing = prevMap.get(evt.id) || {};
-              const subs = (dbSubtasks || [])
-                .filter((s) => s.event_id === evt.id)
-                .map((s) => ({
-                  id: s.id,
-                  titulo: s.titulo,
-                  horasEstimadas: s.horas_estimadas,
-                  fechaLimite: s.fecha_limite,
-                  estado: s.estado,
-                  nota: s.nota || '',
-                  responsable: s.responsable,
-                  isCatering: s.is_catering,
-                  isCritical: s.is_critical,
-                }));
+              return dbEvents.map((evt) => {
+                const existing = prevMap.get(evt.id) || {};
+                const subs = (dbSubtasks || [])
+                  .filter((s) => s.event_id === evt.id)
+                  .map((s) => ({
+                    id: s.id,
+                    titulo: s.titulo,
+                    horasEstimadas: s.horas_estimadas,
+                    fechaLimite: s.fecha_limite,
+                    estado: s.estado,
+                    nota: s.nota || '',
+                    responsable: s.responsable,
+                    isCatering: s.is_catering,
+                    isCritical: s.is_critical,
+                  }));
 
-              return {
-                id: evt.id,
-                userId: evt.user_id,
-                user_id: evt.user_id,
-                nombre: evt.nombre,
-                tipo: evt.tipo,
-                fecha: evt.fecha,
-                // Preservar lugar y asistentes si existen en Supabase o en el estado local previo
-                lugar: evt.lugar !== undefined && evt.lugar !== null && evt.lugar !== ''
-                  ? evt.lugar
-                  : (existing.lugar || ''),
-                asistentes: evt.asistentes !== undefined && evt.asistentes !== null && evt.asistentes !== ''
-                  ? evt.asistentes
-                  : (existing.asistentes !== undefined && existing.asistentes !== '' ? existing.asistentes : ''),
-                descripcion: evt.descripcion || '',
-                hasCriticalError: evt.has_critical_error,
-                subtareas: subs.length > 0 ? subs : (existing.subtareas || []),
-              };
+                return {
+                  id: evt.id,
+                  userId: evt.user_id,
+                  user_id: evt.user_id,
+                  nombre: evt.nombre,
+                  tipo: evt.tipo,
+                  fecha: evt.fecha,
+                  // Preservar lugar y asistentes si existen en Supabase o en el estado local previo
+                  lugar: evt.lugar !== undefined && evt.lugar !== null && evt.lugar !== ''
+                    ? evt.lugar
+                    : (existing.lugar || ''),
+                  asistentes: evt.asistentes !== undefined && evt.asistentes !== null && evt.asistentes !== ''
+                    ? evt.asistentes
+                    : (existing.asistentes !== undefined && existing.asistentes !== '' ? existing.asistentes : ''),
+                  descripcion: evt.descripcion || '',
+                  hasCriticalError: evt.has_critical_error,
+                  subtareas: subs.length > 0 ? subs : (existing.subtareas || []),
+                };
+              });
             });
-          });
+          } else if (!isJuanEstebanDemo && !local) {
+            // Usuario con cuenta limpia sin eventos: asegurar estado vacío
+            setEventos([]);
+          }
         }
       } catch (err) {
         console.warn('Aviso: modo offline/fallback para Supabase:', err);
       }
     }
     cargarDesdeSupabase();
-  }, [currentUser?.uuid]);
+  }, [currentUser?.uuid, currentUser?.id, currentUser?.email]);
 
-  // Cálculo de progreso de un evento (porcentaje exacto 0 - 100 con precisión de 1 decimal)
+  // Cálculo de progreso de un evento (porcentaje exacto 0 - 100 como número entero sin decimales)
   const calcularProgreso = (evento) => {
     if (!evento || !evento.subtareas || evento.subtareas.length === 0) return 0;
     const completadas = evento.subtareas.filter((s) => s.estado === 'Hecha').length;
     const total = evento.subtareas.length;
     if (total === 0) return 0;
-    return Math.round((completadas / total) * 1000) / 10;
+    return Math.round((completadas / total) * 100);
   };
 
   // Determinar color de barra de progreso según Decisión 1
@@ -357,7 +407,7 @@ export function EventsProvider({ children }) {
   // Crear un nuevo evento (T1)
   const crearEvento = (nuevoEvento) => {
     const id = `evt-${Date.now()}`;
-    const userUuid = currentUser?.uuid || '00260f2c-7cfb-411d-be11-61e1e2099d3e';
+    const userUuid = currentUser?.uuid || currentUser?.id || '00260f2c-7cfb-411d-be11-61e1e2099d3e';
     const eventoCompleto = {
       id,
       userId: userUuid,
