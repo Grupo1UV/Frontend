@@ -44,7 +44,7 @@ export const CREDENCIALES_AUTORIZADAS = [
     password: 'Eventify2026*',
     nombre: 'Administrador Eventify',
     rol: 'Super Administrador',
-    uuid: 'e05f7c64-90b3-4d33-ca53-413199142ea4',
+    uuid: '7dc9f160-a901-43a3-8a9f-21eb6050bf66',
   },
 ];
 

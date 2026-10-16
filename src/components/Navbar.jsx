@@ -5,7 +5,7 @@ import eventifyBadgeImg from '../assets/eventify-badge.png';
 import ConfigurarLimiteModal from './ConfigurarLimiteModal';
 
 export default function Navbar() {
-  const { eventos, currentUser, logout, limiteDiario } = useEvents();
+  const { eventos, currentUser, logout, limiteDiario, horasUrgentesHoy } = useEvents();
   const [showConfigModal, setShowConfigModal] = useState(false);
 
   return (
@@ -54,14 +54,15 @@ export default function Navbar() {
             Progreso
           </NavLink>
 
-          {/* Botón para Configurar Límite Diario de Horas (Sprint 3) */}
+          {/* Botón para Configurar Límite Diario de Horas / Carga Urgente del Día (C3: Consistencia con /hoy) */}
           <button
             type="button"
             className="nav-item btn-navbar-capacity"
             onClick={() => setShowConfigModal(true)}
-            title="Configurar límite diario de horas"
+            title={`Carga urgente hoy: ${horasUrgentesHoy ?? 0}h / Límite diario: ${limiteDiario}h (Clic para configurar límite)`}
+            aria-label={`Carga urgente diaria: ${horasUrgentesHoy ?? 0} horas de un límite de ${limiteDiario} horas al día`}
           >
-            <span aria-hidden="true">⏱️</span> {limiteDiario}h/día
+            <span aria-hidden="true">⏱️</span> {horasUrgentesHoy ?? 0}h/día
           </button>
 
           {/* Enlace directo a Iniciar Sesión / Perfil */}

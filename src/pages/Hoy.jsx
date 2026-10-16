@@ -26,6 +26,7 @@ export default function Hoy() {
     actualizarHorasSubtarea,
     obtenerHorasAsignadasAFecha,
     limiteDiario,
+    horasUrgentesHoy,
     eliminarSubtarea,
     hasGlobalError,
     hasCateringModuleError,
@@ -152,26 +153,52 @@ export default function Hoy() {
     setFiltroDias('todos');
   };
 
-  // Módulo aislado de catering para Decisión 3
-  const tareasCatering = tareasFiltradas.filter(
-    (t) => t.isCatering || (t.titulo && t.titulo.toLowerCase().includes('catering'))
-  );
+  // Módulo aislado de catering para Decisión 3 (excluye completadas y pospuestas si se muestran pendientes)
+  const tareasCatering = tareasFiltradas.filter((t) => {
+    const match = t.isCatering || (t.titulo && t.titulo.toLowerCase().includes('catering'));
+    if (!match) return false;
+    if (filtroEstado === 'todos') {
+      const isPostponed = t.estado === 'POSTERGADA' || t.estado === 'Pospuesta';
+      if (isPostponed || t.estado === 'Hecha') return false;
+    }
+    return true;
+  });
 
-  // 3. Lógica de Agrupación Temporal (Vencidas, Hoy, Próximas) a partir de las tareas filtradas
+  // 3. Lógica de Agrupación Temporal y Estados (C3: Consistencia con /hoy)
+  // Las tareas 'Hecha' se excluyen de la lista urgente; las pospuestas se reclasifican o retiran de hoy
   const vencidas = tareasFiltradas.filter((t) => {
+    if (t.estado === 'Hecha') return false;
+    const isPostponed = t.estado === 'POSTERGADA' || t.estado === 'Pospuesta';
+    if (isPostponed) return false;
     const iso = parseFechaLimite(t.fechaLimite);
-    return iso < todayIso && t.estado !== 'Hecha';
+    return iso < todayIso;
   });
 
   const paraHoy = tareasFiltradas.filter((t) => {
+    if (t.estado === 'Hecha') return false;
+    const isPostponed = t.estado === 'POSTERGADA' || t.estado === 'Pospuesta';
+    if (isPostponed) return false;
     const iso = parseFechaLimite(t.fechaLimite);
-    return iso === todayIso;
+    return iso === todayIso || t.fechaLimite === 'Hoy';
   });
 
   const proximas = tareasFiltradas.filter((t) => {
+    if (t.estado === 'Hecha') return false;
     const iso = parseFechaLimite(t.fechaLimite);
     return iso > todayIso;
   });
+
+  const pospuestas = tareasFiltradas.filter((t) => {
+    if (t.estado === 'Hecha') return false;
+    const isPostponed = t.estado === 'POSTERGADA' || t.estado === 'Pospuesta';
+    if (!isPostponed) return false;
+    // Si fue reprogramada a una fecha futura válida (iso > todayIso), se reclasifica en Próximas
+    const iso = parseFechaLimite(t.fechaLimite);
+    if (iso > todayIso) return false;
+    return true;
+  });
+
+  const hechas = tareasFiltradas.filter((t) => t.estado === 'Hecha');
 
   // 4. Ordenamiento Correcto con .sort() cronológico (de más antigua a más lejana)
   const ordenarCronologicamente = (a, b) => {
@@ -185,7 +212,9 @@ export default function Hoy() {
 
   const vencidasOrdenadas = [...vencidas].sort(ordenarCronologicamente);
   const paraHoyOrdenadas = [...paraHoy].sort(ordenarCronologicamente);
+  const pospuestasOrdenadas = [...pospuestas].sort(ordenarCronologicamente);
   const proximasOrdenadas = [...proximas].sort(ordenarCronologicamente);
+  const hechasOrdenadas = [...hechas].sort(ordenarCronologicamente);
 
   // Solicitar eliminación de tarea (Modal de riesgo)
   const handleRequestDeleteTask = (eventoId, task) => {
@@ -484,11 +513,15 @@ export default function Hoy() {
           </div>
 
           <div className="kpi-group">
-            <div className="kpi-card">
+            <div className="kpi-card" title="Horas urgentes pendientes de realizar hoy">
+              <span className="kpi-label">Carga hoy</span>
+              <span className="kpi-number">{horasUrgentesHoy ?? 0}h</span>
+            </div>
+            <div className="kpi-card" title="Tareas urgentes programadas para hoy">
               <span className="kpi-label">Urgentes hoy</span>
               <span className="kpi-number">{paraHoy.length}</span>
             </div>
-            <div className="kpi-card">
+            <div className="kpi-card" title="Tareas con fecha límite vencida">
               <span className="kpi-label">Vencidas</span>
               <span className="kpi-number kpi-danger">{vencidas.length}</span>
             </div>
@@ -722,6 +755,37 @@ export default function Hoy() {
           </section>
 
           {/* =================================================================== */}
+          {/* SECCIÓN POSPUESTAS (Retiradas de urgencias del día / aplazadas)    */}
+          {/* =================================================================== */}
+          {pospuestasOrdenadas.length > 0 && (
+            <section className="dashboard-section section-temporal-block">
+              <div className="temporal-group-header">
+                <div className="temporal-title-group">
+                  <span className="temporal-dot" style={{ backgroundColor: '#f59e0b' }} aria-hidden="true" />
+                  <h3 className="temporal-heading">Pospuestas</h3>
+                  <span className="temporal-badge" style={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: 700 }}>
+                    {pospuestasOrdenadas.length}
+                  </span>
+                </div>
+                <span className="temporal-hint">Gestiones aplazadas retiradas de la urgencia del día</span>
+              </div>
+
+              <div className="task-grid">
+                {pospuestasOrdenadas.map((task) => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={marcarSubtareaHecha}
+                    onSnooze={handlePosponerSubtarea}
+                    onReprogram={handleAbrirReprogramar}
+                    onDeleteRequest={handleRequestDeleteTask}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* =================================================================== */}
           {/* 3. SECCIÓN PRÓXIMAS (Fecha de vencimiento posterior al día de hoy)  */}
           {/* =================================================================== */}
           <section className="dashboard-section section-temporal-block">
@@ -755,6 +819,43 @@ export default function Hoy() {
               </div>
             )}
           </section>
+
+          {/* =================================================================== */}
+          {/* SECCIÓN COMPLETADAS (Visible al filtrar por estado 'hecha')         */}
+          {/* =================================================================== */}
+          {filtroEstado === 'hecha' && (
+            <section className="dashboard-section section-temporal-block">
+              <div className="temporal-group-header">
+                <div className="temporal-title-group">
+                  <span className="temporal-dot" style={{ backgroundColor: '#16a34a' }} aria-hidden="true" />
+                  <h3 className="temporal-heading">Completadas</h3>
+                  <span className="temporal-badge" style={{ backgroundColor: '#dcfce7', color: '#15803d', fontWeight: 700 }}>
+                    {hechasOrdenadas.length}
+                  </span>
+                </div>
+                <span className="temporal-hint">Gestiones finalizadas exitosamente</span>
+              </div>
+
+              {hechasOrdenadas.length === 0 ? (
+                <div className="temporal-empty-hint">
+                  <span>No hay tareas completadas para mostrar con los filtros actuales.</span>
+                </div>
+              ) : (
+                <div className="task-grid">
+                  {hechasOrdenadas.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      onComplete={marcarSubtareaHecha}
+                      onSnooze={handlePosponerSubtarea}
+                      onReprogram={handleAbrirReprogramar}
+                      onDeleteRequest={handleRequestDeleteTask}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
 

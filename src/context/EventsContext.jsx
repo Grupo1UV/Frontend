@@ -1,81 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { normalizarJornada } from '../utils/validacionesHoras';
+import { normalizarJornada, hoyIso } from '../utils/validacionesHoras';
 import { api } from '../services/api';
 
 const EventsContext = createContext(null);
-
-const EVENTOS_INICIALES = [
-  {
-    id: 'evt-1',
-    nombre: 'Boda Valentina & Emilio',
-    tipo: 'Boda',
-    fecha: '2026-11-20',
-    lugar: 'Valle de Bravo',
-    asistentes: 280,
-    descripcion: 'Organización integral para 280 invitados en Valle de Bravo.',
-    hasCriticalError: false,
-    subtareas: [
-      { id: 'sub-1-1', titulo: 'Diseño e impresión de invitaciones', horasEstimadas: 2, fechaLimite: '2026-10-05', estado: 'Hecha', responsable: 'Valentina' },
-      { id: 'sub-1-2', titulo: 'Selección de paleta floral y ambientación', horasEstimadas: 3, fechaLimite: '2026-10-08', estado: 'Hecha', responsable: 'Floristería Jardín' },
-      { id: 'sub-1-3', titulo: 'Contratar fotógrafo profesional', horasEstimadas: 4, fechaLimite: '2026-09-25', estado: 'Pendiente', responsable: 'Studio Luz' },
-      { id: 'sub-1-4', titulo: 'Reservar salón de eventos principal', horasEstimadas: 3, fechaLimite: '2026-10-15', estado: 'Pendiente', responsable: 'Hacienda Valle' },
-      { id: 'sub-1-5', titulo: 'Confirmar catering y menú degustación', horasEstimadas: 2, fechaLimite: 'Hoy', estado: 'Pendiente', responsable: 'Carlos Catering' },
-      { id: 'sub-1-6', titulo: 'Contratar ambientación musical y DJ', horasEstimadas: 2, fechaLimite: '2026-10-18', estado: 'Pendiente', responsable: 'AudioSound' },
-      { id: 'sub-1-7', titulo: 'Prueba de vestuario y estilismo', horasEstimadas: 3, fechaLimite: '2026-10-22', estado: 'Pendiente', responsable: 'Estilista' },
-      { id: 'sub-1-8', titulo: 'Coordinación de flores y centros de mesa', horasEstimadas: 2, fechaLimite: '2026-10-25', estado: 'Pendiente', responsable: 'Floristería Jardín' },
-      { id: 'sub-1-9', titulo: 'Selección de tarta y mesa de dulces', horasEstimadas: 2, fechaLimite: '2026-10-28', estado: 'Pendiente', responsable: 'Pastelería Gourmet' },
-      { id: 'sub-1-10', titulo: 'Contratación de transporte para invitados', horasEstimadas: 3, fechaLimite: '2026-11-01', estado: 'Pendiente', responsable: 'Transportes Valle' },
-      { id: 'sub-1-11', titulo: 'Coordinación del cortejo y protocolo', horasEstimadas: 2, fechaLimite: '2026-11-05', estado: 'Pendiente', responsable: 'Coordinador' },
-      { id: 'sub-1-12', titulo: 'Gestión de recuerdos y detalles para asistentes', horasEstimadas: 2, fechaLimite: '2026-11-08', estado: 'Pendiente', responsable: 'Valentina' },
-      { id: 'sub-1-13', titulo: 'Planificación de plano de mesas y seating chart', horasEstimadas: 3, fechaLimite: '2026-11-12', estado: 'Pendiente', responsable: 'Emilio' },
-      { id: 'sub-1-14', titulo: 'Coordinación técnica de luces y pirotecnia fría', horasEstimadas: 3, fechaLimite: '2026-11-15', estado: 'Pendiente', responsable: 'Luces & Show' },
-    ],
-  },
-  {
-    id: 'evt-2',
-    nombre: 'Graduación Facultad de Ingeniería - Univalle',
-    tipo: 'Institucional / Ceremonia',
-    fecha: '2026-12-15',
-    descripcion: 'Ceremonia solemne y recepción para 80 graduandos de la Universidad del Valle.',
-    hasCriticalError: false,
-    subtareas: [
-      { id: 'sub-2-1', titulo: 'Reserva del Auditorio Principal', horasEstimadas: 3, fechaLimite: '2026-11-01', estado: 'Pendiente', responsable: 'Admin Univalle' },
-      { id: 'sub-2-2', titulo: 'Impresión de actas y diplomas honoríficos', horasEstimadas: 2, fechaLimite: '2026-11-10', estado: 'Pendiente', responsable: 'Editorial UV' },
-      { id: 'sub-2-3', titulo: 'Coordinación protocolo y maestro de ceremonias', horasEstimadas: 2, fechaLimite: '2026-11-20', estado: 'Pendiente', responsable: 'Comité Protocolo' },
-      { id: 'sub-2-4', titulo: 'Contratación servicio de streaming en vivo', horasEstimadas: 4, fechaLimite: '2026-11-25', estado: 'Pendiente', responsable: 'Equipo Audiovisual' },
-    ],
-  },
-  {
-    id: 'evt-3',
-    nombre: 'Conferencia Empresarial Tech 2026',
-    tipo: 'Corporativo / Congreso',
-    fecha: '2026-10-28',
-    descripcion: 'Congreso de transformación digital y tecnología con 300 asistentes empresariales.',
-    hasCriticalError: true, // Alerta crítica logística para demostrar la Decisión 1 (Rojo #DC2626)
-    alertaDetalle: 'Conflicto crítico con proveedor de sonido y bloqueo en permisos municipales.',
-    subtareas: [
-      { id: 'sub-3-1', titulo: 'Gestión urgente de catering ejecutivo', horasEstimadas: 3, fechaLimite: 'Hoy', estado: 'Pendiente', responsable: 'Proveedor Gourmet', isCatering: true },
-      { id: 'sub-3-2', titulo: 'Resolver bloqueo de sonido y tarima', horasEstimadas: 5, fechaLimite: 'Hoy', estado: 'Pendiente', responsable: 'Sonido Pro', isCritical: true },
-      { id: 'sub-3-3', titulo: 'Confirmar agenda de ponentes internacionales', horasEstimadas: 4, fechaLimite: 'Mañana', estado: 'Pendiente', responsable: 'Coordinador Académico' },
-      { id: 'sub-3-4', titulo: 'Registro de acreditaciones y gafetes', horasEstimadas: 2, fechaLimite: '2026-10-20', estado: 'Pendiente', responsable: 'Logística Tech' },
-    ],
-  },
-  {
-    id: 'evt-4',
-    nombre: 'Festival de Jazz Universitario 2026',
-    tipo: 'Cultural / Concierto',
-    fecha: '2026-09-30',
-    descripcion: 'Muestra musical interuniversitaria finalizada con éxito rotundo.',
-    hasCriticalError: false,
-    subtareas: [
-      { id: 'sub-4-1', titulo: 'Montaje de tarima y camerinos', horasEstimadas: 6, fechaLimite: '2026-09-28', estado: 'Hecha', responsable: 'Escenografía UV' },
-      { id: 'sub-4-2', titulo: 'Ensayo general de bandas universitarias', horasEstimadas: 4, fechaLimite: '2026-09-29', estado: 'Hecha', responsable: 'Dirección Musical' },
-      { id: 'sub-4-3', titulo: 'Control de accesos y seguridad del campus', horasEstimadas: 5, fechaLimite: '2026-09-30', estado: 'Hecha', responsable: 'Seguridad' },
-      { id: 'sub-4-4', titulo: 'Cierre logístico y entrega de instrumentos', horasEstimadas: 3, fechaLimite: '2026-09-30', estado: 'Hecha', responsable: 'Producción' },
-    ],
-  },
-];
 
 // Helper para clave de aislamiento en localStorage por usuario
 const getUserStorageKey = (user) => {
@@ -91,8 +19,18 @@ export function EventsProvider({ children }) {
       const stored = localStorage.getItem('eventify_user_auth_v1');
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Sanitizar si era una cuenta que no es Juan Esteban pero tenía el UUID demo asignado por error
+        // Sanitizar si era admin con el UUID viejo
         if (
+          parsed?.email &&
+          (parsed.email.toLowerCase() === 'admin@eventify.com' || parsed.usuario === 'admin') &&
+          parsed.uuid !== '7dc9f160-a901-43a3-8a9f-21eb6050bf66'
+        ) {
+          parsed.uuid = '7dc9f160-a901-43a3-8a9f-21eb6050bf66';
+          parsed.id = '7dc9f160-a901-43a3-8a9f-21eb6050bf66';
+          try {
+            localStorage.setItem('eventify_user_auth_v1', JSON.stringify(parsed));
+          } catch {}
+        } else if (
           parsed?.email &&
           parsed.email.toLowerCase() !== 'juanesteban@valle.co' &&
           parsed.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e'
@@ -122,6 +60,12 @@ export function EventsProvider({ children }) {
         initialUser = JSON.parse(storedAuth);
         if (
           initialUser?.email &&
+          (initialUser.email.toLowerCase() === 'admin@eventify.com' || initialUser.usuario === 'admin')
+        ) {
+          initialUser.uuid = '7dc9f160-a901-43a3-8a9f-21eb6050bf66';
+          initialUser.id = '7dc9f160-a901-43a3-8a9f-21eb6050bf66';
+        } else if (
+          initialUser?.email &&
           initialUser.email.toLowerCase() !== 'juanesteban@valle.co' &&
           initialUser.uuid === '00260f2c-7cfb-411d-be11-61e1e2099d3e'
         ) {
@@ -130,7 +74,16 @@ export function EventsProvider({ children }) {
       }
 
       const key = getUserStorageKey(initialUser);
-      const stored = localStorage.getItem(key);
+      let stored = localStorage.getItem(key);
+      // Si admin no tiene eventos en su clave nueva, verificar si estaban en la clave previa y migrar
+      if (!stored && (initialUser?.email?.toLowerCase() === 'admin@eventify.com' || initialUser?.usuario === 'admin')) {
+        const legacyAdmin = localStorage.getItem('eventify_events_e05f7c64-90b3-4d33-ca53-413199142ea4');
+        if (legacyAdmin) {
+          stored = legacyAdmin;
+          localStorage.setItem(key, legacyAdmin);
+        }
+      }
+
       if (stored) {
         return JSON.parse(stored);
       }
@@ -296,16 +249,65 @@ export function EventsProvider({ children }) {
 
     async function cargarDesdeSupabase() {
       try {
-        const userUuid = currentUser.uuid || currentUser.id;
+        const isAdmin = currentUser?.email?.toLowerCase() === 'admin@eventify.com' || currentUser?.usuario === 'admin';
+        const validAdminId = '7dc9f160-a901-43a3-8a9f-21eb6050bf66';
+        const userUuid = isAdmin ? validAdminId : (currentUser.uuid || currentUser.id);
+
         let query = supabase.from('events').select('*');
-        if (isJuanEstebanDemo) {
+        if (isAdmin) {
+          query = query.or(`user_id.eq.${validAdminId},user_id.eq.081a73fd-b700-4540-95b9-837825293f88,user_id.eq.e05f7c64-90b3-4d33-ca53-413199142ea4`);
+        } else if (isJuanEstebanDemo) {
           query = query.or(`user_id.eq.${userUuid},user_id.is.null`);
         } else {
           query = query.eq('user_id', userUuid);
         }
 
-        const { data: dbEvents, error: errEvt } = await query;
+        let { data: dbEvents, error: errEvt } = await query;
         const { data: dbSubtasks } = await supabase.from('subtasks').select('*');
+
+        // Auto-sincronización de eventos locales hacia Supabase (sube automáticamente eventos creados localmente que hayan fallado)
+        if (local) {
+          try {
+            const localEvents = JSON.parse(local);
+            const dbEventIds = new Set((dbEvents || []).map((e) => e.id));
+            const eventosFaltantes = localEvents.filter((le) => le && le.id && !dbEventIds.has(le.id));
+            if (eventosFaltantes.length > 0) {
+              for (const missing of eventosFaltantes) {
+                const targetUserId = isAdmin ? validAdminId : userUuid;
+                const insertRes = await supabase.from('events').insert({
+                  id: missing.id,
+                  user_id: targetUserId,
+                  nombre: missing.nombre,
+                  tipo: missing.tipo || 'General',
+                  fecha: missing.fecha,
+                  lugar: missing.lugar || '',
+                  asistentes: Number(missing.asistentes) || 0,
+                  descripcion: missing.descripcion || '',
+                  has_critical_error: !!missing.hasCriticalError,
+                });
+                if (!insertRes.error && Array.isArray(missing.subtareas) && missing.subtareas.length > 0) {
+                  const subsToInsert = missing.subtareas.map((s) => ({
+                    id: s.id,
+                    event_id: missing.id,
+                    titulo: s.titulo,
+                    horas_estimadas: Number(s.horasEstimadas) || 1,
+                    fecha_limite: s.fechaLimite || '',
+                    estado: s.estado || 'Pendiente',
+                    nota: s.nota || '',
+                    responsable: s.responsable || '',
+                    is_catering: !!s.isCatering,
+                    is_critical: !!s.isCritical,
+                  }));
+                  await supabase.from('subtasks').insert(subsToInsert);
+                }
+              }
+              const { data: refreshed } = await query;
+              if (refreshed) dbEvents = refreshed;
+            }
+          } catch (syncEx) {
+            console.warn('Auto-sync hacia Supabase:', syncEx);
+          }
+        }
 
         if (!errEvt && dbEvents) {
           if (dbEvents.length > 0) {
@@ -358,6 +360,22 @@ export function EventsProvider({ children }) {
       }
     }
     cargarDesdeSupabase();
+
+    // Sincronización en tiempo real vía websockets de Supabase para actualización instantánea multidispositivo
+    const channel = supabase
+      .channel('realtime-events-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
+        cargarDesdeSupabase();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks' }, () => {
+        cargarDesdeSupabase();
+      })
+      .subscribe();
+
+    return () => {
+      clearTimeout(loadTimer);
+      supabase.removeChannel(channel);
+    };
   }, [currentUser?.uuid, currentUser?.id, currentUser?.email]);
 
   // Cálculo de progreso de un evento (porcentaje exacto 0 - 100 como número entero sin decimales)
@@ -407,7 +425,10 @@ export function EventsProvider({ children }) {
   // Crear un nuevo evento (T1)
   const crearEvento = (nuevoEvento) => {
     const id = `evt-${Date.now()}`;
-    const userUuid = currentUser?.uuid || currentUser?.id || '00260f2c-7cfb-411d-be11-61e1e2099d3e';
+    const isAdmin = currentUser?.email?.toLowerCase() === 'admin@eventify.com' || currentUser?.usuario === 'admin';
+    const validAdminId = '7dc9f160-a901-43a3-8a9f-21eb6050bf66';
+    const userUuid = isAdmin ? validAdminId : (currentUser?.uuid || currentUser?.id || validAdminId);
+
     const eventoCompleto = {
       id,
       userId: userUuid,
@@ -438,18 +459,27 @@ export function EventsProvider({ children }) {
           has_critical_error: eventoCompleto.hasCriticalError,
         };
 
-        const { error } = await supabase.from('events').insert(payloadConColumnas);
-        if (error) {
-          // Si las columnas nuevas aún no existen en la BD, insertar con los campos base
-          await supabase.from('events').insert({
-            id: eventoCompleto.id,
-            user_id: userUuid,
-            nombre: eventoCompleto.nombre,
-            tipo: eventoCompleto.tipo,
-            fecha: eventoCompleto.fecha,
-            descripcion: eventoCompleto.descripcion,
-            has_critical_error: eventoCompleto.hasCriticalError,
-          });
+        let insertRes = await supabase.from('events').insert(payloadConColumnas);
+        if (insertRes.error) {
+          console.warn('Aviso insert Supabase:', insertRes.error);
+          if (insertRes.error.code === '23503') {
+            insertRes = await supabase.from('events').insert({
+              ...payloadConColumnas,
+              user_id: validAdminId,
+            });
+          }
+          if (insertRes.error) {
+            // Si las columnas nuevas aún no existen en la BD, insertar con los campos base
+            await supabase.from('events').insert({
+              id: eventoCompleto.id,
+              user_id: validAdminId,
+              nombre: eventoCompleto.nombre,
+              tipo: eventoCompleto.tipo,
+              fecha: eventoCompleto.fecha,
+              descripcion: eventoCompleto.descripcion,
+              has_critical_error: eventoCompleto.hasCriticalError,
+            });
+          }
         }
 
         if (eventoCompleto.subtareas && eventoCompleto.subtareas.length > 0) {
@@ -457,9 +487,10 @@ export function EventsProvider({ children }) {
             id: s.id,
             event_id: eventoCompleto.id,
             titulo: s.titulo,
-            horas_estimadas: s.horasEstimadas,
-            fecha_limite: s.fechaLimite,
-            estado: s.estado,
+            horas_estimadas: Number(s.horasEstimadas) || 1,
+            fecha_limite: s.fechaLimite || '',
+            estado: s.estado || 'Pendiente',
+            nota: s.nota || '',
             responsable: s.responsable || '',
             is_catering: !!s.isCatering,
             is_critical: !!s.isCritical,
@@ -718,16 +749,45 @@ export function EventsProvider({ children }) {
   // Helper para sumar horas asignadas a una jornada específica (con opción de excluir una subtarea)
   const obtenerHorasAsignadasAFecha = (fecha, excludeSubtaskId = null) => {
     const targetNorm = normalizarJornada(fecha);
+    const today = hoyIso();
+    const isTargetToday = targetNorm === today;
     let total = 0;
-    eventos.forEach((evt) => {
+    (eventos || []).forEach((evt) => {
       (evt.subtareas || []).forEach((s) => {
-        if (s.id !== excludeSubtaskId && s.estado !== 'Hecha' && normalizarJornada(s.fechaLimite) === targetNorm) {
+        if (s.id === excludeSubtaskId) return;
+        if (s.estado === 'Hecha') return;
+        // Si la jornada es hoy, las tareas pospuestas se restan de la carga urgente del día
+        if (isTargetToday && (s.estado === 'POSTERGADA' || s.estado === 'Pospuesta')) {
+          return;
+        }
+        if (normalizarJornada(s.fechaLimite) === targetNorm) {
           total += Number(s.horasEstimadas) || 0;
         }
       });
     });
     return Math.round(total * 10) / 10;
   };
+
+  // Carga horaria urgente del día en curso (recalculada reactivamente para C3: Consistencia con /hoy)
+  // Resta subtareas completadas ('Hecha') y pospuestas ('POSTERGADA'/'Pospuesta')
+  const calcularHorasUrgentesHoy = () => {
+    const today = hoyIso();
+    let total = 0;
+    (eventos || []).forEach((evt) => {
+      (evt.subtareas || []).forEach((s) => {
+        const isDone = s.estado === 'Hecha';
+        const isPostponed = s.estado === 'POSTERGADA' || s.estado === 'Pospuesta';
+        const norm = normalizarJornada(s.fechaLimite);
+        const esParaHoy = norm === today || s.fechaLimite === 'Hoy';
+        if (!isDone && !isPostponed && esParaHoy) {
+          total += Number(s.horasEstimadas) || 0;
+        }
+      });
+    });
+    return Math.round(total * 10) / 10;
+  };
+
+  const horasUrgentesHoy = calcularHorasUrgentesHoy();
 
   // Eliminar subtarea logística (Decisión 4)
   const eliminarSubtarea = (eventoId, subtareaId) => {
@@ -827,13 +887,15 @@ export function EventsProvider({ children }) {
         currentUser,
         login,
         logout,
-        // Sprint 3: Gestión de Capacidad y Sobrecarga
+        // Sprint 3 y C3: Gestión de Capacidad, Horas Urgentes y Consistencia con /hoy
         limiteDiario,
         setLimiteDiario,
         cambiarLimiteDiario,
         reprogramarSubtarea,
         actualizarHorasSubtarea,
         obtenerHorasAsignadasAFecha,
+        horasUrgentesHoy,
+        calcularHorasUrgentesHoy,
         isLoadingPlanning,
         setIsLoadingPlanning,
         // Helpers para evaluación
