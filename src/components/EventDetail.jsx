@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import ProgressBar from './ProgressBar';
 import TaskBadge from './TaskBadge';
 import Button from './Button';
+import { useEvents } from '../context/EventsContext';
+import { horasPorJornada, jornadasExcedidas, isoToDisplayDate } from '../utils/validacionesHoras';
 
 /**
  * 5. Modo "Ver Detalle" (Lectura en ruta /evento/:id)
@@ -24,12 +26,26 @@ export default function EventDetail({
   onToggleSubtask,
   onDeleteSubtask,
 }) {
+  const { limiteDiario } = useEvents();
+  const limiteUsuario = Number(limiteDiario) || 6;
+
   const totalSubtareas = evento.subtareas?.length || 0;
   const completadas = evento.subtareas?.filter((s) => s.estado === 'Hecha').length || 0;
   const totalHoras = (evento.subtareas || []).reduce(
     (acc, s) => acc + (Number(s.horasEstimadas) || 0),
     0
   );
+  const horasPendientes = (evento.subtareas || [])
+    .filter((s) => s.estado !== 'Hecha')
+    .reduce((acc, s) => acc + (Number(s.horasEstimadas) || 0), 0);
+
+  const cargaJornadas = horasPorJornada(evento.subtareas || []);
+  const conflictosJornada = jornadasExcedidas(evento.subtareas || [], limiteUsuario);
+  const maxHorasJornada = Object.values(cargaJornadas).length > 0
+    ? Math.max(...Object.values(cargaJornadas))
+    : 0;
+  const horasDisponiblesJornada = Math.max(0, Math.round((limiteUsuario - maxHorasJornada) * 10) / 10);
+  const haySobrecargaEvento = conflictosJornada.length > 0;
 
   const lugar = evento.lugar || 'Sin lugar asignado';
   const asistentes = evento.asistentes !== undefined && evento.asistentes !== '' ? evento.asistentes : 'Sin definir';
@@ -74,10 +90,64 @@ export default function EventDetail({
             <span className="meta-box-val">📋 {completadas}/{totalSubtareas} completadas</span>
           </div>
           <div className="read-meta-box">
-            <span className="meta-box-label">Carga horaria total</span>
-            <span className="meta-box-val">⏱️ {totalHoras} horas</span>
+            <span className="meta-box-label">Horas planificadas</span>
+            <span className="meta-box-val">⏱️ {horasPendientes}h pendientes ({totalHoras}h total)</span>
+          </div>
+          <div className="read-meta-box">
+            <span className="meta-box-label">Límite diario / Disponibles</span>
+            <span className="meta-box-val" style={{ color: haySobrecargaEvento ? '#DC2626' : '#15803D' }}>
+              {haySobrecargaEvento
+                ? `⚠️ Límite ${limiteUsuario}h/día (0h disp. • Sobrecarga)`
+                : `✓ Límite ${limiteUsuario}h/día (${horasDisponiblesJornada}h disponibles)`}
+            </span>
           </div>
         </div>
+
+        {/* Estado de capacidad y sobrecarga por jornada */}
+        {haySobrecargaEvento ? (
+          <div
+            role="alert"
+            style={{
+              marginTop: '14px',
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FCA5A5',
+              borderRadius: '10px',
+              padding: '12px 16px',
+              color: '#991B1B',
+              fontSize: '0.88rem',
+            }}
+          >
+            <strong>
+              ⚠️ Sobrecarga detectada respecto a tu límite diario de {limiteUsuario}h/día:
+            </strong>
+            <ul style={{ margin: '6px 0 0 18px' }}>
+              {conflictosJornada.map(([fechaConf, hrsConf]) => (
+                <li key={fechaConf}>
+                  Jornada <strong>{isoToDisplayDate(fechaConf)}</strong>: <strong>{hrsConf}h planificadas</strong> (0h disponibles •{' '}
+                  <strong style={{ color: '#DC2626' }}>
+                    +{Math.round((hrsConf - limiteUsuario) * 10) / 10}h sobre el límite
+                  </strong>
+                  )
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div
+            style={{
+              marginTop: '14px',
+              backgroundColor: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              color: '#15803D',
+              fontSize: '0.86rem',
+              fontWeight: 700,
+            }}
+          >
+            ✓ Capacidad dentro del límite diario ({limiteUsuario}h/día): {maxHorasJornada}h planificadas en jornada pico • {horasDisponiblesJornada}h disponibles.
+          </div>
+        )}
 
         {/* Barra de progreso cromática */}
         <div className="read-progress-wrapper">

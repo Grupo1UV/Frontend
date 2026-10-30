@@ -8,6 +8,7 @@ import SystemModal from '../components/SystemModal';
 import Button from '../components/Button';
 import DatePickerField from '../components/DatePickerField';
 import ConflictoSobrecargaModal from '../components/ConflictoSobrecargaModal';
+import ConfigurarLimiteModal from '../components/ConfigurarLimiteModal';
 import {
   hoyIso,
   isoToDisplayDate,
@@ -27,6 +28,7 @@ export default function Hoy() {
     obtenerHorasAsignadasAFecha,
     limiteDiario,
     horasUrgentesHoy,
+    resumenCapacidad,
     eliminarSubtarea,
     hasGlobalError,
     hasCateringModuleError,
@@ -36,6 +38,8 @@ export default function Hoy() {
     reintentarGlobal,
     recargarModuloCatering,
   } = useEvents();
+
+  const [showLimiteModalHoy, setShowLimiteModalHoy] = useState(false);
 
   // Estado del modal de confirmación y eliminación
   const [modalState, setModalState] = useState({
@@ -184,6 +188,8 @@ export default function Hoy() {
 
   const proximas = tareasFiltradas.filter((t) => {
     if (t.estado === 'Hecha') return false;
+    const isPostponed = t.estado === 'POSTERGADA' || t.estado === 'Pospuesta';
+    if (isPostponed) return false;
     const iso = parseFechaLimite(t.fechaLimite);
     return iso > todayIso;
   });
@@ -191,11 +197,7 @@ export default function Hoy() {
   const pospuestas = tareasFiltradas.filter((t) => {
     if (t.estado === 'Hecha') return false;
     const isPostponed = t.estado === 'POSTERGADA' || t.estado === 'Pospuesta';
-    if (!isPostponed) return false;
-    // Si fue reprogramada a una fecha futura válida (iso > todayIso), se reclasifica en Próximas
-    const iso = parseFechaLimite(t.fechaLimite);
-    if (iso > todayIso) return false;
-    return true;
+    return isPostponed;
   });
 
   const hechas = tareasFiltradas.filter((t) => t.estado === 'Hecha');
@@ -240,40 +242,74 @@ export default function Hoy() {
     }
   };
 
-  // Sprint 3: Abrir modal de reprogramación interactiva
+  // Sprint 3: Abrir modal de reprogramación interactiva y ajuste de duración
   const handleAbrirReprogramar = (_eventoId, task) => {
+    const isoActual = normalizarJornada(task?.fechaLimite);
+    const fechaInicial = isoActual && /^\d{4}-\d{2}-\d{2}$/.test(isoActual) ? isoToDisplayDate(isoActual) : '';
     setReprogramarState({
       isOpen: true,
       task,
-      nuevaFecha: '',
+      nuevaFecha: fechaInicial,
+      nuevasHoras: String(task?.horasEstimadas ?? 1),
       error: '',
     });
   };
 
-  // Sprint 3: Confirmar reprogramación con validación de sobrecarga
+  // Abrir directamente el modal de resolución de sobrecarga para una jornada o actividad específica
+  const handleAbrirResolucionJornada = (jornada, initialMode = 'menu', initialSubtaskId = null) => {
+    if (!jornada) return;
+    const subs = Array.isArray(jornada.subtareas) ? jornada.subtareas : [];
+    const afectada =
+      (initialSubtaskId && subs.find((s) => s.id === initialSubtaskId)) ||
+      subs[0] ||
+      null;
+    setConflictoState({
+      isOpen: true,
+      conflictoData: {
+        fecha: jornada.fecha,
+        fechaDisplay: jornada.fechaDisplay || isoToDisplayDate(jornada.fecha),
+        horasTotales: jornada.horasPlanificadas,
+        limiteDiario: jornada.limiteDiario || limiteDiario,
+        subtareas: subs,
+        subtareaAfectada: afectada,
+        eventoId: afectada?.eventoId,
+        initialMode,
+        initialSubtaskId: afectada?.id || initialSubtaskId,
+      },
+    });
+  };
+
+  // Sprint 3: Confirmar reprogramación o cambio de duración con validación de sobrecarga
   const handleConfirmarReprogramar = async () => {
-    const { task, nuevaFecha } = reprogramarState;
+    const { task, nuevaFecha, nuevasHoras } = reprogramarState;
     if (!task) return;
     if (!nuevaFecha) {
       setReprogramarState((prev) => ({ ...prev, error: 'Selecciona una fecha válida.' }));
       return;
     }
 
+    const horasNum = nuevasHoras !== undefined && nuevasHoras !== '' ? Number(nuevasHoras) : (Number(task.horasEstimadas) || 1);
+    if (!Number.isFinite(horasNum) || horasNum <= 0 || horasNum > 16) {
+      setReprogramarState((prev) => ({ ...prev, error: 'Ingresa una duración válida entre 0.5 y 16 horas.' }));
+      return;
+    }
+
     const iso = normalizarJornada(nuevaFecha);
+    const isoOriginal = normalizarJornada(task.fechaLimite);
     const today = hoyIso();
-    if (iso < today) {
+    if (iso < today && iso !== isoOriginal) {
       setReprogramarState((prev) => ({ ...prev, error: 'La fecha no puede ser anterior a hoy.' }));
       return;
     }
 
     // Sumar horas ya asignadas en esa fecha
     const horasExistentes = obtenerHorasAsignadasAFecha(iso, task.id);
-    const horasTarea = Number(task.horasEstimadas) || 0;
-    const totalConTarea = Math.round((horasExistentes + horasTarea) * 10) / 10;
+    const totalConTarea = Math.round((horasExistentes + horasNum) * 10) / 10;
+    const esReduccionMismaFecha = iso === isoOriginal && horasNum < (Number(task.horasEstimadas) || 0);
 
-    if (totalConTarea > limiteDiario) {
+    if (totalConTarea > limiteDiario && !esReduccionMismaFecha) {
       // Bloquear guardado directo y desplegar modal "Conflicto de sobrecarga"
-      setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+      setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', nuevasHoras: '', error: '' });
       setConflictoState({
         isOpen: true,
         conflictoData: {
@@ -281,33 +317,40 @@ export default function Hoy() {
           fechaDisplay: isoToDisplayDate(iso),
           horasTotales: totalConTarea,
           limiteDiario,
-          subtareas: [task],
-          subtareaAfectada: task,
+          subtareas: [{ ...task, horasEstimadas: horasNum }],
+          subtareaAfectada: { ...task, horasEstimadas: horasNum },
           eventoId: task.eventoId,
         },
       });
       return;
     }
 
-    // Sin conflicto: guardar y actualizar automáticamente a POSTERGADA
+    // Sin conflicto: guardar manteniendo el estado actual de la tarea (sin confundir con pospuesta)
     try {
       setIsSavingTask(true);
       const displayFecha = isoToDisplayDate(iso);
-      await reprogramarSubtarea(task.eventoId, task.id, displayFecha);
-      setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+      if (iso === isoOriginal) {
+        await actualizarHorasSubtarea(task.eventoId, task.id, horasNum);
+      } else {
+        await reprogramarSubtarea(task.eventoId, task.id, displayFecha, horasNum);
+      }
+      setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', nuevasHoras: '', error: '' });
       setNotificacionModal({
         isOpen: true,
         type: 'reprogramar_exito',
-        title: 'Fecha actualizada',
-        message: 'La fecha de la subtarea se actualizó correctamente.',
+        title: iso === isoOriginal ? 'Duración actualizada' : 'Fecha actualizada',
+        message:
+          iso === isoOriginal
+            ? 'La duración estimada de la actividad se actualizó correctamente.'
+            : 'La actividad fue reprogramada correctamente conservando su estado.',
         itemName: task.titulo,
       });
-      setToastMessage('La fecha se guardó exitosamente.');
+      setToastMessage('Los cambios de la actividad se guardaron exitosamente.');
       setTimeout(() => setToastMessage(''), 4500);
     } catch (err) {
       const overload = parseOverloadError(err);
       if (overload) {
-        setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', error: '' });
+        setReprogramarState({ isOpen: false, task: null, nuevaFecha: '', nuevasHoras: '', error: '' });
         setConflictoState({
           isOpen: true,
           conflictoData: {
@@ -315,8 +358,8 @@ export default function Hoy() {
             fechaDisplay: isoToDisplayDate(iso),
             horasTotales: overload.horasTotales,
             limiteDiario: overload.limiteDiario,
-            subtareas: [task],
-            subtareaAfectada: task,
+            subtareas: [{ ...task, horasEstimadas: horasNum }],
+            subtareaAfectada: { ...task, horasEstimadas: horasNum },
             eventoId: task.eventoId,
           },
         });
@@ -329,7 +372,7 @@ export default function Hoy() {
         message: 'Ha ocurrido un error al intentar actualizar la subtarea. Inténtelo de nuevo.',
         itemName: task.titulo,
       });
-      setToastMessage('Falla: no se pudo guardar la fecha.');
+      setToastMessage('Falla: no se pudo guardar la actividad.');
       setTimeout(() => setToastMessage(''), 4500);
     } finally {
       setIsSavingTask(false);
@@ -337,9 +380,12 @@ export default function Hoy() {
   };
 
   // Sprint 3: Resolución Conflicto Opción 1 - Mover a otro día
-  const handleResolverConflictoMover = async (subtask, nuevaFechaDisplay, nuevaFechaIso) => {
+  const handleResolverConflictoMover = async (subtask, nuevaFechaDisplay, nuevaFechaIso, nuevasHoras = null) => {
     const horasExistentes = obtenerHorasAsignadasAFecha(nuevaFechaIso, subtask.id);
-    const horasTarea = Number(subtask.horasEstimadas) || 0;
+    const horasTarea =
+      nuevasHoras !== null && nuevasHoras !== undefined
+        ? Number(nuevasHoras)
+        : (Number(subtask.horasEstimadas) || 0);
     const totalConTarea = Math.round((horasExistentes + horasTarea) * 10) / 10;
 
     if (totalConTarea > limiteDiario) {
@@ -350,8 +396,8 @@ export default function Hoy() {
     }
 
     try {
-      await reprogramarSubtarea(subtask.eventoId, subtask.id, nuevaFechaDisplay);
-      setToastMessage('La fecha se guardó exitosamente.');
+      await reprogramarSubtarea(subtask.eventoId, subtask.id, nuevaFechaDisplay, nuevasHoras);
+      setToastMessage('Actividad reprogramada exitosamente.');
       setTimeout(() => setToastMessage(''), 4500);
       return { ok: true };
     } catch (err) {
@@ -372,12 +418,15 @@ export default function Hoy() {
   // Sprint 3: Resolución Conflicto Opción 2 - Reducir horas estimadas
   const handleResolverConflictoReducir = async (subtask, nuevasHoras) => {
     try {
-      await actualizarHorasSubtarea(subtask.eventoId, subtask.id, nuevasHoras);
-      if (conflictoState.conflictoData?.fecha) {
-        const fechaDisp = conflictoState.conflictoData.fechaDisplay || isoToDisplayDate(conflictoState.conflictoData.fecha);
+      const fechaConflictoIso = normalizarJornada(conflictoState.conflictoData?.fecha);
+      const fechaSubtaskIso = normalizarJornada(subtask.fechaLimite);
+      if (fechaConflictoIso && fechaConflictoIso !== fechaSubtaskIso) {
+        const fechaDisp = conflictoState.conflictoData.fechaDisplay || isoToDisplayDate(fechaConflictoIso);
         await reprogramarSubtarea(subtask.eventoId, subtask.id, fechaDisp, nuevasHoras);
+      } else {
+        await actualizarHorasSubtarea(subtask.eventoId, subtask.id, nuevasHoras);
       }
-      setToastMessage('Las horas estimadas se guardaron exitosamente.');
+      setToastMessage('Las horas estimadas se actualizaron exitosamente.');
       setTimeout(() => setToastMessage(''), 4500);
       return { ok: true };
     } catch (err) {
@@ -440,6 +489,414 @@ export default function Hoy() {
     );
   }
 
+  const planificadasActivas = resumenCapacidad?.horasPlanificadasActivas ?? horasUrgentesHoy ?? 0;
+  const disponiblesActivas =
+    resumenCapacidad?.horasDisponiblesActivas ??
+    Math.max(0, Math.round(((limiteDiario || 6) - planificadasActivas) * 10) / 10);
+  const etiquetaJornadaCapacidad = resumenCapacidad?.etiquetaJornadaActiva || 'Hoy';
+  const haySobrecargaCapacidad = resumenCapacidad?.haySobrecarga ?? planificadasActivas > (limiteDiario || 6);
+  const excesoCapacidad =
+    resumenCapacidad?.excesoActivo ??
+    Math.max(0, Math.round((planificadasActivas - (limiteDiario || 6)) * 10) / 10);
+  const jornadasSobrecargadas = resumenCapacidad?.jornadasSobrecargadas || [];
+  const porcentajeUsoCapacidad =
+    limiteDiario > 0 ? Math.min(100, Math.round((planificadasActivas / limiteDiario) * 100)) : 0;
+
+  const renderPanelCapacidadDiaria = () => (
+    <section
+      className="dashboard-section"
+      aria-label=" Estado de Capacidad Diaria"
+      style={{
+        backgroundColor: '#FFFFFF',
+        border: `1.5px solid ${haySobrecargaCapacidad ? '#FCA5A5' : '#BFDBFE'}`,
+        borderRadius: '16px',
+        padding: '20px 24px',
+        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          marginBottom: '16px',
+        }}
+      >
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '1.2rem' }} aria-hidden="true">
+              {haySobrecargaCapacidad ? '⚠️' : '⏱️'}
+            </span>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              Capacidad Diaria del Usuario
+            </h2>
+            <span
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                padding: '3px 10px',
+                borderRadius: '999px',
+                backgroundColor: haySobrecargaCapacidad ? '#FEE2E2' : '#DCFCE7',
+                color: haySobrecargaCapacidad ? '#DC2626' : '#15803D',
+                border: `1px solid ${haySobrecargaCapacidad ? '#FCA5A5' : '#86EFAC'}`,
+              }}
+            >
+              {haySobrecargaCapacidad
+                ? `⚠️ Sobrecarga detectada (+${excesoCapacidad}h)`
+                : '✓ Sin sobrecarga'}
+            </span>
+          </div>
+          <p style={{ fontSize: '0.86rem', color: '#64748B', marginTop: '4px' }}>
+            Balance operativo basado en tu límite configurado de <strong>{limiteDiario}h/día</strong> ({etiquetaJornadaCapacidad}).
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowLimiteModalHoy(true)}
+          style={{
+            backgroundColor: '#EFF6FF',
+            color: '#1D4ED8',
+            border: '1px solid #BFDBFE',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          ⚙️ Configurar límite ({limiteDiario}h/día)
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+          gap: '12px',
+          marginBottom: '14px',
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
+            padding: '12px 16px',
+          }}
+        >
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+            Límite diario
+          </span>
+          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>
+            {limiteDiario}h <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748B' }}>/ día</span>
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
+            padding: '12px 16px',
+          }}
+        >
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+            Horas planificadas ({etiquetaJornadaCapacidad})
+          </span>
+          <div
+            style={{
+              fontSize: '1.6rem',
+              fontWeight: 800,
+              color: haySobrecargaCapacidad ? '#DC2626' : '#2563EB',
+              marginTop: '2px',
+            }}
+          >
+            {planificadasActivas}h
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
+            padding: '12px 16px',
+          }}
+        >
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
+            Horas disponibles
+          </span>
+          <div
+            style={{
+              fontSize: '1.6rem',
+              fontWeight: 800,
+              color: disponiblesActivas > 0 ? '#16A34A' : '#D97706',
+              marginTop: '2px',
+            }}
+          >
+            {disponiblesActivas}h
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: haySobrecargaCapacidad ? '#FEF2F2' : '#F0FDF4',
+            border: `1px solid ${haySobrecargaCapacidad ? '#FECACA' : '#BBF7D0'}`,
+            borderRadius: '12px',
+            padding: '12px 16px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: haySobrecargaCapacidad ? '#991B1B' : '#166534',
+              textTransform: 'uppercase',
+            }}
+          >
+            Estado de sobrecarga
+          </span>
+          <div
+            style={{
+              fontSize: '1.05rem',
+              fontWeight: 800,
+              color: haySobrecargaCapacidad ? '#DC2626' : '#15803D',
+              marginTop: '6px',
+            }}
+          >
+            {haySobrecargaCapacidad
+              ? `Sobrecarga: +${excesoCapacidad}h sobre el límite`
+              : `Normal (${disponiblesActivas}h libres)`}
+          </div>
+        </div>
+      </div>
+
+      {/* Barra visual de ocupación del límite diario */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div
+          style={{
+            width: '100%',
+            height: '9px',
+            backgroundColor: '#E2E8F0',
+            borderRadius: '999px',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              width: `${porcentajeUsoCapacidad}%`,
+              height: '100%',
+              backgroundColor: haySobrecargaCapacidad ? '#DC2626' : '#2563EB',
+              borderRadius: '999px',
+              transition: 'width 0.3s ease, background-color 0.3s ease',
+            }}
+          />
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '0.8rem',
+            color: '#475569',
+            fontWeight: 600,
+          }}
+        >
+          <span>
+            Ocupación: {planificadasActivas}h planificadas de {limiteDiario}h permitidas por día
+          </span>
+          <span>{disponiblesActivas}h disponibles</span>
+        </div>
+      </div>
+
+      {/* Detalle explícito de jornadas en sobrecarga con alternativas interactivas de resolución */}
+      {jornadasSobrecargadas.length > 0 ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: '14px',
+            backgroundColor: '#FEF2F2',
+            border: '1.5px solid #FCA5A5',
+            borderRadius: '12px',
+            padding: '16px 18px',
+            color: '#991B1B',
+            fontSize: '0.88rem',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '10px' }}>
+            <strong style={{ fontSize: '0.96rem', color: '#7F1D1D' }}>
+              ⚠️ Alerta de sobrecarga diaria: Las horas pendientes superan tu límite configurado de {limiteDiario}h/día
+            </strong>
+            <span
+              style={{
+                backgroundColor: '#DC2626',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '0.78rem',
+                padding: '3px 10px',
+                borderRadius: '999px',
+              }}
+            >
+              Requiere ajuste
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {jornadasSobrecargadas.map((j) => (
+              <div
+                key={j.fecha}
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #FECACA',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.92rem' }}>
+                      📅 Jornada: {j.fechaDisplay}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '6px', fontSize: '0.84rem', color: '#334155' }}>
+                      <span>
+                        • Horas planificadas para ese día: <strong>{j.horasPlanificadas}h</strong>
+                      </span>
+                      <span>
+                        • Límite diario configurado: <strong>{limiteDiario}h</strong>
+                      </span>
+                      <span style={{ color: '#DC2626', fontWeight: 700 }}>
+                        • Horas que exceden el límite: <strong>+{j.exceso}h (sobrecarga de {j.exceso}h)</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleAbrirResolucionJornada(j, 'mover')}
+                      style={{
+                        backgroundColor: '#2563EB',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '7px 12px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      📅 Reprogramar actividades
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAbrirResolucionJornada(j, 'reducir')}
+                      style={{
+                        backgroundColor: '#EFF6FF',
+                        color: '#1D4ED8',
+                        border: '1px solid #93C5FD',
+                        borderRadius: '8px',
+                        padding: '7px 12px',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ⏱️ Modificar duración
+                    </button>
+                  </div>
+                </div>
+
+                {Array.isArray(j.subtareas) && j.subtareas.length > 0 && (
+                  <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #FECACA' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#7F1D1D', display: 'block', marginBottom: '6px' }}>
+                      Actividades pendientes en esta jornada (selecciona una alternativa para solucionar el conflicto):
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {j.subtareas.map((sub) => (
+                        <div
+                          key={sub.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: '8px',
+                            backgroundColor: '#FEF2F2',
+                            padding: '6px 10px',
+                            borderRadius: '8px',
+                            fontSize: '0.82rem',
+                          }}
+                        >
+                          <span style={{ color: '#0F172A', fontWeight: 600 }}>
+                            {sub.titulo} <strong style={{ color: '#DC2626' }}>({sub.horasEstimadas}h)</strong>{' '}
+                            <span style={{ color: '#64748B', fontWeight: 400 }}>• {sub.eventoNombre}</span>
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleAbrirResolucionJornada(j, 'mover', sub.id)}
+                              style={{
+                                backgroundColor: '#FFFFFF',
+                                color: '#1D4ED8',
+                                border: '1px solid #BFDBFE',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              📅 Reprogramar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAbrirResolucionJornada(j, 'reducir', sub.id)}
+                              style={{
+                                backgroundColor: '#FFFFFF',
+                                color: '#0F172A',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                fontSize: '0.76rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              ⏱️ Modificar duración
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div
+          role="status"
+          style={{
+            marginTop: '14px',
+            backgroundColor: '#F0FDF4',
+            border: '1px solid #86EFAC',
+            borderRadius: '10px',
+            padding: '10px 14px',
+            color: '#166534',
+            fontSize: '0.86rem',
+            fontWeight: 600,
+          }}
+        >
+          ✓ Capacidad dentro del límite: Tienes <strong>{disponiblesActivas}h disponibles</strong> de tu límite diario de{' '}
+          <strong>{limiteDiario}h</strong> ({planificadasActivas}h en actividades pendientes para {etiquetaJornadaCapacidad}).
+        </div>
+      )}
+    </section>
+  );
+
   // Estado Vacío (Empty State - Sprint 3)
   if (isEmpty || todasLasTareas.length === 0) {
     return (
@@ -452,6 +909,8 @@ export default function Hoy() {
           </div>
         </header>
 
+        {renderPanelCapacidadDiaria()}
+
         <EmptyState
           isEmpty={true}
           icon={<span style={{ fontSize: '3.6rem' }} role="img" aria-label="Taza de café">☕</span>}
@@ -459,6 +918,11 @@ export default function Hoy() {
           subtitle="Actualmente no cuentas con ninguna tarea programada en tu panel. Crea tu primera actividad para comenzar a planificar."
           actionText="Crear actividad"
           actionTo="/crear-evento"
+        />
+
+        <ConfigurarLimiteModal
+          isOpen={showLimiteModalHoy}
+          onClose={() => setShowLimiteModalHoy(false)}
         />
       </div>
     );
@@ -513,9 +977,17 @@ export default function Hoy() {
           </div>
 
           <div className="kpi-group">
-            <div className="kpi-card" title="Horas urgentes pendientes de realizar hoy">
-              <span className="kpi-label">Carga hoy</span>
-              <span className="kpi-number">{horasUrgentesHoy ?? 0}h</span>
+            <div className="kpi-card" title="Horas planificadas frente al límite diario">
+              <span className="kpi-label">Planificadas</span>
+              <span className={`kpi-number ${haySobrecargaCapacidad ? 'kpi-danger' : ''}`}>
+                {planificadasActivas}h / {limiteDiario}h
+              </span>
+            </div>
+            <div className="kpi-card" title="Horas disponibles según tu límite diario">
+              <span className="kpi-label">Disponibles</span>
+              <span className="kpi-number" style={{ color: disponiblesActivas > 0 ? '#16A34A' : '#D97706' }}>
+                {disponiblesActivas}h
+              </span>
             </div>
             <div className="kpi-card" title="Tareas urgentes programadas para hoy">
               <span className="kpi-label">Urgentes hoy</span>
@@ -528,6 +1000,9 @@ export default function Hoy() {
           </div>
         </div>
       </header>
+
+      {/* Panel de Capacidad Diaria con Horas Planificadas, Disponibles y Estado de Sobrecarga */}
+      {renderPanelCapacidadDiaria()}
 
       {/* Barra de Filtros Visuales (US-05) */}
       <section className="dashboard-section hoy-filter-toolbar" aria-label="Filtros de búsqueda de tareas">
@@ -909,8 +1384,30 @@ export default function Hoy() {
                 min={todayIso}
                 placeholder="DD/MM/AAAA"
               />
+            </div>
+
+            <div className="form-field" style={{ margin: '12px 0' }}>
+              <label htmlFor="reprogramar-horas-input" className="form-label">
+                Duración estimada (horas) <span className="required-star">*</span>
+              </label>
+              <div className="inline-limit-input-group">
+                <input
+                  id="reprogramar-horas-input"
+                  type="number"
+                  min="0.5"
+                  max="16"
+                  step="0.5"
+                  value={reprogramarState.nuevasHoras ?? ''}
+                  onChange={(e) =>
+                    setReprogramarState((prev) => ({ ...prev, nuevasHoras: e.target.value, error: '' }))
+                  }
+                  className="input-focus-active"
+                  style={{ width: '100%', padding: '9px 12px', fontSize: '0.95rem' }}
+                />
+                <span className="unit-suffix">hrs</span>
+              </div>
               <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '6px' }}>
-                Al guardar, la tarea quedará marcada automáticamente en estado <strong>POSTERGADA</strong>.
+                Al reprogramar o ajustar la duración, la actividad conservará su estado actual (sin confundirse con actividades pospuestas).
               </p>
             </div>
 
@@ -953,6 +1450,12 @@ export default function Hoy() {
         message={notificacionModal.message}
         itemName={notificacionModal.itemName}
         onClose={() => setNotificacionModal({ isOpen: false, type: '', title: '', message: '', itemName: '' })}
+      />
+
+      {/* Modal de Configuración de Límite Diario desde Hoy */}
+      <ConfigurarLimiteModal
+        isOpen={showLimiteModalHoy}
+        onClose={() => setShowLimiteModalHoy(false)}
       />
 
       {/* Toast Notificación Flotante */}

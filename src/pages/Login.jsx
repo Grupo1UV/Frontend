@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useEvents } from '../context/EventsContext';
+import { useEvents, cleanRoleString, extractLimitFromRole } from '../context/EventsContext';
 import { supabase } from '../services/supabaseClient';
 import eventifyBadgeImg from '../assets/eventify-badge.png';
 
@@ -133,22 +133,51 @@ export default function Login({ initialMode = 'login' }) {
         (u) => u.usuario.toLowerCase() === cleanUser || u.email.toLowerCase() === cleanUser
       );
 
-      // 2. Si no es credencial pre-autorizada, consultar en la base de datos Supabase
-      if (!userFound) {
-        try {
-          const { data: dbUsers, error: dbError } = await supabase
-            .from('app_users')
-            .select('*')
-            .or(`usuario.ilike.${cleanUser},email.ilike.${cleanUser}`)
-            .limit(1);
+      // 2. Consultar en la base de datos Supabase (tanto para usuarios nuevos como para sincronizar el límite diario)
+      try {
+        const { data: dbUsers, error: dbError } = await supabase
+          .from('app_users')
+          .select('*')
+          .or(`usuario.ilike.${cleanUser},email.ilike.${cleanUser}`)
+          .limit(1);
 
-          if (!dbError && dbUsers && dbUsers.length > 0) {
-            const rawUser = dbUsers[0];
-            userFound = { ...rawUser, uuid: rawUser.uuid || rawUser.id };
+        if (!dbError && dbUsers && dbUsers.length > 0) {
+          const rawUser = dbUsers[0];
+          const dbLimit =
+            Number.isFinite(Number(rawUser.limite_horas_dia)) && Number(rawUser.limite_horas_dia) >= 1
+              ? Number(rawUser.limite_horas_dia)
+              : extractLimitFromRole(rawUser.rol);
+          const cleanedRol = cleanRoleString(rawUser.rol);
+
+          if (userFound) {
+            userFound = {
+              ...userFound,
+              rol: cleanedRol || userFound.rol,
+              ...(dbLimit !== null ? { limiteDiario: dbLimit, limite_horas_dia: dbLimit } : {}),
+            };
+          } else {
+            userFound = {
+              ...rawUser,
+              id: rawUser.id || rawUser.uuid,
+              uuid: rawUser.uuid || rawUser.id,
+              rol: cleanedRol,
+              ...(dbLimit !== null ? { limiteDiario: dbLimit, limite_horas_dia: dbLimit } : {}),
+            };
+            try {
+              const localUsers = JSON.parse(localStorage.getItem('eventify_registered_users') || '[]');
+              const filtered = localUsers.filter(
+                (u) =>
+                  u.id !== userFound.id &&
+                  u.usuario?.toLowerCase() !== userFound.usuario?.toLowerCase() &&
+                  u.email?.toLowerCase() !== userFound.email?.toLowerCase()
+              );
+              filtered.push(userFound);
+              localStorage.setItem('eventify_registered_users', JSON.stringify(filtered));
+            } catch {}
           }
-        } catch (dbEx) {
-          console.warn('Consulta en Supabase app_users:', dbEx);
         }
+      } catch (dbEx) {
+        console.warn('Consulta en Supabase app_users:', dbEx);
       }
 
       // 3. Fallback de respaldo en localStorage (eventify_registered_users)
@@ -159,7 +188,22 @@ export default function Login({ initialMode = 'login' }) {
             (u) => u.usuario.toLowerCase() === cleanUser || u.email.toLowerCase() === cleanUser
           );
           if (foundLocal) {
-            userFound = { ...foundLocal, uuid: foundLocal.uuid || foundLocal.id };
+            userFound = { ...foundLocal, id: foundLocal.id || foundLocal.uuid, uuid: foundLocal.uuid || foundLocal.id };
+            // Sincronizar hacia app_users en segundo plano si se había registrado sin conexión
+            supabase
+              .from('app_users')
+              .insert([
+                {
+                  id: userFound.id,
+                  nombre: userFound.nombre,
+                  usuario: userFound.usuario,
+                  email: userFound.email,
+                  password: userFound.password,
+                  rol: userFound.rol || 'Organizador Independiente',
+                },
+              ])
+              .then(() => {})
+              .catch(() => {});
           }
         } catch (localEx) {
           console.warn('Consulta en usuarios locales:', localEx);

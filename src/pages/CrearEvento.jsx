@@ -43,7 +43,7 @@ import {
  */
 export default function CrearEvento() {
   const navigate = useNavigate();
-  const { crearEvento, limiteDiario } = useEvents();
+  const { crearEvento, limiteDiario, cambiarLimiteDiario } = useEvents();
 
   const [nombre, setNombre] = useState('');
   const [tipo, setTipo] = useState('Boda');
@@ -206,13 +206,18 @@ export default function CrearEvento() {
   };
 
   // Sprint 3: Resolver conflicto en Crear Evento - Mover a otro día
-  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay) => {
+  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay, _nuevaFechaIso, nuevasHoras = null) => {
     setSubtareasPlan((prev) => {
       const exists = prev.some((s) => s.id === subtask.id);
       if (exists) {
         return prev.map((s) =>
           s.id === subtask.id
-            ? { ...s, fechaLimite: nuevaFechaDisplay, estado: 'POSTERGADA' }
+            ? {
+                ...s,
+                fechaLimite: nuevaFechaDisplay,
+                horasEstimadas: nuevasHoras !== null && nuevasHoras !== undefined ? Number(nuevasHoras) : s.horasEstimadas,
+                estado: s.estado || 'Pendiente',
+              }
             : s
         );
       }
@@ -221,7 +226,8 @@ export default function CrearEvento() {
         {
           ...subtask,
           fechaLimite: nuevaFechaDisplay,
-          estado: 'POSTERGADA',
+          horasEstimadas: nuevasHoras !== null && nuevasHoras !== undefined ? Number(nuevasHoras) : subtask.horasEstimadas,
+          estado: subtask.estado || 'Pendiente',
         },
       ];
     });
@@ -522,14 +528,22 @@ export default function CrearEvento() {
             {/* Carga horaria por jornada (validación dinámica) */}
             {subtareasPlan.length > 0 && (
               <div className="jornada-load-list" aria-live="polite">
-                {Object.entries(cargaPorJornada).map(([jornada, horas]) => (
-                  <span
-                    key={jornada}
-                    className={`jornada-load-chip ${horas > limiteJornada ? 'is-over' : ''}`}
-                  >
-                    {jornada}: <strong>{horas} / {limiteJornada} h</strong>
-                  </span>
-                ))}
+                {Object.entries(cargaPorJornada).map(([jornada, horas]) => {
+                  const disp = Math.max(0, Math.round((limiteJornada - horas) * 10) / 10);
+                  const isOver = horas > limiteJornada;
+                  return (
+                    <span
+                      key={jornada}
+                      className={`jornada-load-chip ${isOver ? 'is-over' : ''}`}
+                    >
+                      Jornada {isoToDisplayDate(jornada)}:{' '}
+                      <strong>
+                        {horas}h planificadas / {limiteJornada}h límite
+                      </strong>{' '}
+                      • {isOver ? `⚠️ Sobrecarga (+${Math.round((horas - limiteJornada) * 10) / 10}h)` : `${disp}h disponibles`}
+                    </span>
+                  );
+                })}
               </div>
             )}
 
@@ -619,14 +633,16 @@ export default function CrearEvento() {
                     type="number"
                     min={LIMITE_JORNADA_MIN}
                     max={LIMITE_JORNADA_MAX}
+                    step="0.5"
                     className="input-focus-active"
                     value={limiteJornada}
                     onKeyDown={bloquearTeclasNoNumericas}
                     onChange={(e) => {
-                      const n = Math.round(Number(e.target.value));
-                      setLimiteJornada(
-                        Math.min(Math.max(n || LIMITE_JORNADA_MIN, LIMITE_JORNADA_MIN), LIMITE_JORNADA_MAX)
-                      );
+                      const raw = Number(e.target.value);
+                      if (Number.isFinite(raw)) {
+                        const clamped = Math.min(Math.max(raw, LIMITE_JORNADA_MIN), LIMITE_JORNADA_MAX);
+                        cambiarLimiteDiario?.(clamped);
+                      }
                     }}
                   />
                 </div>

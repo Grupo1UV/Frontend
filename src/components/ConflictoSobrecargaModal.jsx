@@ -44,6 +44,7 @@ export default function ConflictoSobrecargaModal({
 
   // Estado para modo 'mover'
   const [nuevaFecha, setNuevaFecha] = useState('');
+  const [nuevasHorasMover, setNuevasHorasMover] = useState('');
   const [errorMover, setErrorMover] = useState('');
 
   // Estado para modo 'reducir'
@@ -70,7 +71,8 @@ export default function ConflictoSobrecargaModal({
 
   useEffect(() => {
     if (isOpen) {
-      setModo('menu');
+      const startMode = conflictoData?.initialMode || 'menu';
+      setModo(startMode);
       setNuevaFecha('');
       setErrorMover('');
       setErrorReducir('');
@@ -86,11 +88,27 @@ export default function ConflictoSobrecargaModal({
         onConfirm: null,
       });
 
-      if (conflictoData?.subtareaAfectada?.id) {
-        setSubtareaSeleccionadaId(conflictoData.subtareaAfectada.id);
-      } else if (conflictoData?.subtareas?.length > 0) {
-        setSubtareaSeleccionadaId(conflictoData.subtareas[conflictoData.subtareas.length - 1].id);
+      const list = conflictoData?.subtareas || [];
+      const targetSub =
+        (conflictoData?.initialSubtaskId && list.find((s) => s.id === conflictoData.initialSubtaskId)) ||
+        conflictoData?.subtareaAfectada ||
+        (list.length > 0 ? list[list.length - 1] : null);
+
+      if (targetSub?.id) {
+        setSubtareaSeleccionadaId(targetSub.id);
       }
+
+      const lim = Number(conflictoData?.limiteDiario) || 6;
+      const tot = Number(conflictoData?.horasTotales) || 0;
+      const hSub = Number(targetSub?.horasEstimadas) || 1;
+      const hOtras = Math.max(0, Math.round((tot - hSub) * 10) / 10);
+      const margen = Math.max(0, Math.round((lim - hOtras) * 10) / 10);
+      const sugerenciaReducir =
+        margen >= 0.5
+          ? Math.min(margen, Math.max(0.5, Math.round((hSub - 0.5) * 10) / 10))
+          : Math.max(0.5, Math.min(lim, Math.round((hSub - 0.5) * 10) / 10));
+      setNuevasHorasInput(String(sugerenciaReducir));
+      setNuevasHorasMover(hSub > lim ? String(lim) : String(hSub));
     }
   }, [isOpen, conflictoData]);
 
@@ -115,6 +133,10 @@ export default function ConflictoSobrecargaModal({
   const horasSubtarea = Number(subtareaActiva.horasEstimadas) || 0;
   const horasOtras = Math.max(0, Math.round((horasTotales - horasSubtarea) * 10) / 10);
   const margenDisponible = Math.max(0, Math.round((limiteDiario - horasOtras) * 10) / 10);
+  const maxPermitidoReducir =
+    margenDisponible >= 0.5
+      ? margenDisponible
+      : Math.max(0.5, Math.min(limiteDiario, Math.round((horasSubtarea - 0.5) * 10) / 10));
 
   // 1. Manejar confirmación de mover a otro día
   const handleConfirmarMover = async () => {
@@ -158,10 +180,28 @@ export default function ConflictoSobrecargaModal({
       return;
     }
 
+    let horasParaMover = null;
+    if (horasSubtarea > limiteDiario || (nuevasHorasMover !== '' && Number(nuevasHorasMover) !== horasSubtarea)) {
+      const parsedMoverHours = Number(nuevasHorasMover);
+      if (!Number.isFinite(parsedMoverHours) || parsedMoverHours <= 0 || parsedMoverHours > limiteDiario) {
+        setFeedbackModal({
+          isOpen: true,
+          type: 'error_actualizar',
+          category: 'error',
+          title: 'Error al actualizar',
+          message: `La duración de la actividad debe ser mayor a 0 y no superar tu límite diario (${limiteDiario}h).`,
+          itemName: nombreGestion,
+          onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
+        });
+        return;
+      }
+      horasParaMover = parsedMoverHours;
+    }
+
     if (onResolverMover) {
       try {
         setIsSaving(true);
-        const res = await onResolverMover(subtareaActiva, nuevaFecha, iso);
+        const res = await onResolverMover(subtareaActiva, nuevaFecha, iso, horasParaMover);
         if (res && res.ok === false) {
           setFeedbackModal({
             isOpen: true,
@@ -236,13 +276,16 @@ export default function ConflictoSobrecargaModal({
       return;
     }
 
-    if (val > margenDisponible) {
+    if (val > maxPermitidoReducir) {
       setFeedbackModal({
         isOpen: true,
         type: 'error_actualizar',
         category: 'error',
         title: 'Error al actualizar',
-        message: `No puedes asignar más de ${margenDisponible}h para no superar el límite de ${limiteDiario}h.`,
+        message:
+          margenDisponible >= 0.5
+            ? `No puedes asignar más de ${margenDisponible}h para no superar el límite de ${limiteDiario}h.`
+            : `Ingresa una duración menor a las ${horasSubtarea}h actuales (máximo ${maxPermitidoReducir}h).`,
         itemName: nombreGestion,
         onConfirm: () => setFeedbackModal((prev) => ({ ...prev, isOpen: false })),
       });
@@ -390,11 +433,12 @@ export default function ConflictoSobrecargaModal({
                 className="btn-token btn-primary"
                 onClick={() => {
                   setModo('mover');
+                  setNuevasHorasMover(horasSubtarea > limiteDiario ? String(limiteDiario) : String(horasSubtarea));
                   setErrorMover('');
                 }}
                 style={{ justifyContent: 'center', padding: '12px' }}
               >
-                📅 Mover a otro día
+                📅 Reprogramar actividad (Mover a otro día)
               </button>
 
               <button
@@ -402,7 +446,7 @@ export default function ConflictoSobrecargaModal({
                 className="btn-token"
                 onClick={() => {
                   setModo('reducir');
-                  setNuevasHorasInput(margenDisponible > 0 ? String(margenDisponible) : '1');
+                  setNuevasHorasInput(String(maxPermitidoReducir));
                   setErrorReducir('');
                   setSuccessReducir('');
                 }}
@@ -415,7 +459,7 @@ export default function ConflictoSobrecargaModal({
                   fontWeight: 600,
                 }}
               >
-                ⏱️ Reducir horas estimadas
+                ⏱️ Modificar duración (Reducir horas estimadas)
               </button>
 
               <button
@@ -459,6 +503,33 @@ export default function ConflictoSobrecargaModal({
               </div>
             )}
 
+            {subtareas.length > 1 && (
+              <div className="form-field" style={{ margin: '8px 0' }}>
+                <label htmlFor="select-subtarea-mover" className="form-label-sm" style={{ fontWeight: 600, color: '#334155' }}>
+                  Actividad a reprogramar:
+                </label>
+                <select
+                  id="select-subtarea-mover"
+                  className="filter-select"
+                  style={{ fontSize: '0.88rem', padding: '7px 10px', width: '100%' }}
+                  value={subtareaSeleccionadaId}
+                  onChange={(e) => {
+                    const nextId = e.target.value;
+                    setSubtareaSeleccionadaId(nextId);
+                    const nextSub = subtareas.find((s) => s.id === nextId);
+                    const nextH = Number(nextSub?.horasEstimadas) || 1;
+                    setNuevasHorasMover(nextH > limiteDiario ? String(limiteDiario) : String(nextH));
+                  }}
+                >
+                  {subtareas.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.titulo || 'Gestión sin título'} ({s.horasEstimadas}h)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="form-field" style={{ margin: '10px 0' }}>
               <label className="form-label">
                 Nueva fecha límite / Jornada <span className="required-star">*</span>
@@ -473,9 +544,32 @@ export default function ConflictoSobrecargaModal({
                 placeholder="DD/MM/AAAA"
               />
               <p style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '6px' }}>
-                Solo fechas de hoy o futuras disponibles. La tarea quedará marcada automáticamente como <strong>POSTERGADA</strong>.
+                Solo fechas de hoy o futuras disponibles. La actividad conservará su estado actual sin confundirse con una tarea pospuesta.
               </p>
             </div>
+
+            {horasSubtarea > limiteDiario && (
+              <div className="form-field" style={{ margin: '10px 0', padding: '10px 12px', backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px' }}>
+                <label htmlFor="input-horas-mover" className="form-label" style={{ fontWeight: 600, color: '#92400E', fontSize: '0.85rem' }}>
+                  ⚠️ Esta actividad dura {horasSubtarea}h y supera tu límite diario ({limiteDiario}h). Ajusta también su duración:
+                </label>
+                <div className="inline-limit-input-group" style={{ marginTop: '6px' }}>
+                  <input
+                    id="input-horas-mover"
+                    type="number"
+                    min="0.5"
+                    max={limiteDiario}
+                    step="0.5"
+                    onKeyDown={bloquearTeclasNoNumericas}
+                    value={nuevasHorasMover}
+                    onChange={(e) => setNuevasHorasMover(e.target.value)}
+                    className="input-focus-active"
+                    style={{ width: '100%', padding: '8px 12px', fontSize: '0.9rem' }}
+                  />
+                  <span className="unit-suffix">hrs</span>
+                </div>
+              </div>
+            )}
 
             <div className="system-modal-actions" style={{ marginTop: '12px' }}>
               <Button
@@ -533,9 +627,37 @@ export default function ConflictoSobrecargaModal({
                 <label className="form-label-sm" style={{ fontWeight: 600, color: '#334155' }}>
                   Subtarea afectada:
                 </label>
-                <div style={{ padding: '8px 12px', backgroundColor: '#F1F5F9', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: 600, color: '#0F172A', fontSize: '0.9rem' }}>
-                  {subtareaActiva.titulo || 'Gestión sin título'}
-                </div>
+                {subtareas.length > 1 ? (
+                  <select
+                    id="select-subtarea-reducir"
+                    className="filter-select"
+                    style={{ fontSize: '0.9rem', padding: '8px 12px', width: '100%', fontWeight: 600 }}
+                    value={subtareaSeleccionadaId}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setSubtareaSeleccionadaId(nextId);
+                      const nextSub = subtareas.find((s) => s.id === nextId);
+                      const hSub = Number(nextSub?.horasEstimadas) || 1;
+                      const hOtras = Math.max(0, Math.round((horasTotales - hSub) * 10) / 10);
+                      const margen = Math.max(0, Math.round((limiteDiario - hOtras) * 10) / 10);
+                      const sug =
+                        margen >= 0.5
+                          ? Math.min(margen, Math.max(0.5, Math.round((hSub - 0.5) * 10) / 10))
+                          : Math.max(0.5, Math.min(limiteDiario, Math.round((hSub - 0.5) * 10) / 10));
+                      setNuevasHorasInput(String(sug));
+                    }}
+                  >
+                    {subtareas.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.titulo || 'Gestión sin título'} ({s.horasEstimadas}h)
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div style={{ padding: '8px 12px', backgroundColor: '#F1F5F9', borderRadius: '8px', border: '1px solid #CBD5E1', fontWeight: 600, color: '#0F172A', fontSize: '0.9rem' }}>
+                    {subtareaActiva.titulo || 'Gestión sin título'}
+                  </div>
+                )}
               </div>
 
               {/* 2. Horas actuales de la tarea */}
@@ -547,12 +669,12 @@ export default function ConflictoSobrecargaModal({
 
                 {/* 3. Indicador de disponibilidad del día (ej. "5h (de 6h límite)") */}
                 <div style={{ flex: 1.4, padding: '10px', backgroundColor: '#EFF6FF', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#1E40AF', display: 'block' }}>Disponibilidad de la jornada:</span>
+                  <span style={{ fontSize: '0.75rem', color: '#1E40AF', display: 'block' }}>Otras actividades en la jornada:</span>
                   <strong style={{ fontSize: '1rem', color: '#1D4ED8' }}>
                     {horasOtras}h (de {limiteDiario}h límite)
                   </strong>
                   <span style={{ fontSize: '0.75rem', color: '#2563EB', display: 'block', marginTop: '2px' }}>
-                    Margen disponible: <strong>{margenDisponible}h</strong>
+                    Máximo permitido para esta tarea: <strong>{maxPermitidoReducir}h</strong>
                   </span>
                 </div>
               </div>
@@ -567,10 +689,10 @@ export default function ConflictoSobrecargaModal({
                     id="input-nuevas-horas-subtarea"
                     type="number"
                     min="0.5"
-                    max={margenDisponible > 0 ? margenDisponible : limiteDiario}
+                    max={maxPermitidoReducir}
                     step="0.5"
                     onKeyDown={bloquearTeclasNoNumericas}
-                    placeholder={`Máx ${margenDisponible}h`}
+                    placeholder={`Máx ${maxPermitidoReducir}h`}
                     value={nuevasHorasInput}
                     disabled={isSaving || Boolean(successReducir)}
                     onChange={(e) => {

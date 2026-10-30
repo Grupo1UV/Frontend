@@ -15,7 +15,7 @@ const getBaseUrl = () => {
   const isProd =
     (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'production') ||
     (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
-  return isProd ? 'https://grupo1uv.onrender.com/api' : 'http://localhost:3000/api';
+  return isProd ? 'https://grupo1uv.onrender.com/api' : 'http://localhost:8000/api';
 };
 
 const BASE_URL = getBaseUrl();

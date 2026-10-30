@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import Button from './Button';
 import { useEvents } from '../context/EventsContext';
 import { bloquearTeclasNoNumericas } from '../utils/validacionesHoras';
-import api from '../services/api';
 
 /**
  * Modal para Configuración de Límite Diario de Horas (Sprint 3)
@@ -14,7 +13,7 @@ import api from '../services/api';
  *   - Error fuera de rango: "El valor debe estar entre 1 y 16".
  */
 export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
-  const { limiteDiario, cambiarLimiteDiario } = useEvents();
+  const { limiteDiario, cambiarLimiteDiario, calcularResumenCapacidad } = useEvents();
   const [valorInput, setValorInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -27,18 +26,6 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
       setErrorMsg('');
       setSuccessMsg('');
       setIsSaving(false);
-
-      // Consulta del límite actual
-      if (typeof api?.getCapacity === 'function') {
-        api.getCapacity()
-          .then((res) => {
-            const val = res?.data?.limitHoursDay ?? res?.limitHoursDay ?? res?.data?.limiteDiario ?? res?.limiteDiario;
-            if (val) setValorInput(String(val));
-          })
-          .catch(() => {
-            // Si no hay conexión o no existe perfil previo, conservar el límite local
-          });
-      }
 
       const timer = setTimeout(() => {
         if (inputRef.current) inputRef.current.focus();
@@ -58,6 +45,27 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
   }, [isOpen, isSaving, onClose]);
 
   if (!isOpen) return null;
+
+  const trimmedPreview = String(valorInput ?? '').trim();
+  const numericPreview = trimmedPreview === '' ? 6 : Number(trimmedPreview);
+  const limitePreviewValido =
+    Number.isFinite(numericPreview) && numericPreview >= 1 && numericPreview <= 16
+      ? Math.round(numericPreview * 10) / 10
+      : limiteDiario || 6;
+
+  const resumenPreview = calcularResumenCapacidad
+    ? calcularResumenCapacidad(limitePreviewValido)
+    : {
+        limiteDiario: limitePreviewValido,
+        horasPlanificadasHoy: 0,
+        horasDisponiblesHoy: limitePreviewValido,
+        horasPlanificadasActivas: 0,
+        horasDisponiblesActivas: limitePreviewValido,
+        etiquetaJornadaActiva: 'Hoy',
+        haySobrecarga: false,
+        excesoActivo: 0,
+        jornadasSobrecargadas: [],
+      };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,11 +88,13 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
     try {
       const res = await cambiarLimiteDiario(n);
       if (res.ok) {
-        setSuccessMsg('Límite actualizado');
+        setSuccessMsg(
+          `Límite actualizado a ${res.limite}h/día y guardado correctamente en la base de datos.`
+        );
         setTimeout(() => {
           setIsSaving(false);
           onClose?.();
-        }, 800);
+        }, 1200);
       } else {
         setIsSaving(false);
         setErrorMsg(res.error || 'El valor debe estar entre 1 y 16');
@@ -109,7 +119,7 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
           </div>
           <div>
             <h3 id="config-limit-title" className="system-modal-title">
-              Límite Diario
+              Límite Diario de Capacidad
             </h3>
             <p className="system-modal-desc" style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '2px' }}>
               Define tu margen máximo de horas trabajables por jornada (h/día).
@@ -158,6 +168,116 @@ export default function ConfigurarLimiteModal({ isOpen = false, onClose }) {
             <p className="field-hint-text" style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '4px' }}>
               Rango operativo permitido: estrictamente de 1 a 16 horas diarias.
             </p>
+          </div>
+
+          {/* Vista previa en tiempo real de impacto del límite configurado */}
+          <div
+            style={{
+              marginTop: '14px',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              backgroundColor: resumenPreview.haySobrecarga ? '#FEF2F2' : '#F8FAFC',
+              border: `1px solid ${resumenPreview.haySobrecarga ? '#FECACA' : '#E2E8F0'}`,
+            }}
+          >
+            <div
+              style={{
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                color: resumenPreview.haySobrecarga ? '#991B1B' : '#475569',
+                marginBottom: '8px',
+              }}
+            >
+              Resumen de Capacidad ({resumenPreview.etiquetaJornadaActiva})
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '8px',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  background: '#FFFFFF',
+                  padding: '8px 6px',
+                  borderRadius: '8px',
+                  border: '1px solid #E2E8F0',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Límite diario</div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
+                  {limitePreviewValido}h
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: '#FFFFFF',
+                  padding: '8px 6px',
+                  borderRadius: '8px',
+                  border: '1px solid #E2E8F0',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Planificadas</div>
+                <div
+                  style={{
+                    fontSize: '1.05rem',
+                    fontWeight: 800,
+                    color: resumenPreview.haySobrecarga ? '#DC2626' : '#2563EB',
+                  }}
+                >
+                  {resumenPreview.horasPlanificadasActivas}h
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: '#FFFFFF',
+                  padding: '8px 6px',
+                  borderRadius: '8px',
+                  border: '1px solid #E2E8F0',
+                }}
+              >
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Disponibles</div>
+                <div
+                  style={{
+                    fontSize: '1.05rem',
+                    fontWeight: 800,
+                    color: resumenPreview.horasDisponiblesActivas > 0 ? '#16A34A' : '#D97706',
+                  }}
+                >
+                  {resumenPreview.horasDisponiblesActivas}h
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: '10px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                color: resumenPreview.haySobrecarga ? '#DC2626' : '#15803D',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              {resumenPreview.haySobrecarga ? (
+                <span>
+                  ⚠️ Existe sobrecarga: superas el límite por +{resumenPreview.excesoActivo}h (
+                  {resumenPreview.horasPlanificadasActivas}h planificadas vs {limitePreviewValido}h de límite).
+                </span>
+              ) : (
+                <span>
+                  ✓ Sin sobrecarga: cuentas con {resumenPreview.horasDisponiblesActivas}h disponibles dentro de tu límite de {limitePreviewValido}h/día.
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="system-modal-actions" style={{ marginTop: '16px' }}>

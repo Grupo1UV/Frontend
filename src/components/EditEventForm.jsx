@@ -24,7 +24,7 @@ export default function EditEventForm({
   onCancel,
   onDeleteSubtask = null,
 }) {
-  const { limiteDiario } = useEvents();
+  const { limiteDiario, cambiarLimiteDiario } = useEvents();
   const limiteActivo = limiteDiario || 6;
 
   const [formData, setFormData] = useState(() => ({
@@ -37,6 +37,15 @@ export default function EditEventForm({
     limiteHorasPorJornada: limiteActivo,
     subtareas: evento?.subtareas ? JSON.parse(JSON.stringify(evento.subtareas)) : [],
   }));
+
+  React.useEffect(() => {
+    if (limiteDiario && Number.isFinite(Number(limiteDiario))) {
+      setFormData((prev) => ({
+        ...prev,
+        limiteHorasPorJornada: Number(limiteDiario),
+      }));
+    }
+  }, [limiteDiario]);
 
   const [conflictoModalData, setConflictoModalData] = useState({
     isOpen: false,
@@ -100,7 +109,7 @@ export default function EditEventForm({
 
   const handleAddSubtask = () => {
     const nueva = {
-      id: `sub-${Date.now()}`,
+      id: `sub-new-${Date.now()}`,
       titulo: '',
       horasEstimadas: 2,
       fechaLimite: formData.fecha || 'Hoy',
@@ -111,8 +120,8 @@ export default function EditEventForm({
   };
 
   const handleDeleteSubtask = (idx, sub) => {
-    if (sub.id && String(sub.id).startsWith('sub-')) {
-      // Tarea local recién creada
+    if (sub.id && String(sub.id).startsWith('sub-new-')) {
+      // Tarea local recién creada en el formulario actual
       setFormData((prev) => ({
         ...prev,
         subtareas: prev.subtareas.filter((_, i) => i !== idx),
@@ -135,19 +144,24 @@ export default function EditEventForm({
       setFormData((prev) => ({
         ...prev,
         subtareas: prev.subtareas.filter(
-          (s) => evento.subtareas.some((es) => es.id === s.id) || String(s.id).startsWith('sub-')
+          (s) => evento.subtareas.some((es) => es.id === s.id) || String(s.id).startsWith('sub-new-')
         ),
       }));
     }
   }, [evento?.subtareas]);
 
   // Sprint 3: Resolver conflicto de sobrecarga - Mover a otro día
-  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay) => {
+  const handleResolverConflictoMover = (subtask, nuevaFechaDisplay, _nuevaFechaIso, nuevasHoras = null) => {
     setFormData((prev) => ({
       ...prev,
       subtareas: prev.subtareas.map((s) =>
         s.id === subtask.id
-          ? { ...s, fechaLimite: nuevaFechaDisplay, estado: 'POSTERGADA' }
+          ? {
+              ...s,
+              fechaLimite: nuevaFechaDisplay,
+              horasEstimadas: nuevasHoras !== null && nuevasHoras !== undefined ? Number(nuevasHoras) : s.horasEstimadas,
+              estado: s.estado || 'Pendiente',
+            }
           : s
       ),
     }));
@@ -241,6 +255,7 @@ export default function EditEventForm({
         const normFecha = normalizarJornada(s.fechaLimite);
         return {
           ...s,
+          id: s.id ? String(s.id).replace(/^sub-new-/, 'sub-') : `sub-${Date.now()}`,
           fechaLimite: normFecha !== 'Sin fecha' ? normFecha : s.fechaLimite,
         };
       }),
@@ -385,20 +400,49 @@ export default function EditEventForm({
           <div className="workload-limit-input-group">
             <input
               type="number"
-              min="2"
+              min="1"
               max="16"
+              step="0.5"
+              onKeyDown={bloquearTeclasNoNumericas}
               className="input-focus-active input-limit-hours"
               value={formData.limiteHorasPorJornada}
-              onChange={(e) =>
-                setFormData({ ...formData, limiteHorasPorJornada: Number(e.target.value) || 6 })
-              }
+              onChange={(e) => {
+                const raw = e.target.value;
+                const num = Number(raw);
+                const val = Number.isFinite(num) && num >= 1 && num <= 16 ? num : formData.limiteHorasPorJornada;
+                setFormData({ ...formData, limiteHorasPorJornada: raw === '' ? '' : num });
+                if (Number.isFinite(num) && num >= 1 && num <= 16) {
+                  cambiarLimiteDiario?.(val);
+                }
+              }}
             />
             <span>horas/día</span>
           </div>
         </div>
       </div>
 
-      {/* Validación en tiempo real de sobrecarga */}
+      {/* Validación en tiempo real de sobrecarga y horas disponibles por jornada */}
+      {Object.keys(horasPorFecha).length > 0 && (
+        <div className="jornada-load-list" aria-live="polite" style={{ marginBottom: '12px' }}>
+          {Object.entries(horasPorFecha).map(([jornada, horas]) => {
+            const disp = Math.max(0, Math.round((formData.limiteHorasPorJornada - horas) * 10) / 10);
+            const isOver = horas > formData.limiteHorasPorJornada;
+            return (
+              <span
+                key={jornada}
+                className={`jornada-load-chip ${isOver ? 'is-over' : ''}`}
+              >
+                Jornada {isoToDisplayDate(jornada)}:{' '}
+                <strong>
+                  {horas}h planificadas / {formData.limiteHorasPorJornada}h límite
+                </strong>{' '}
+                • {isOver ? `⚠️ Sobrecarga (+${Math.round((horas - formData.limiteHorasPorJornada) * 10) / 10}h)` : `${disp}h disponibles`}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {tieneConflicto ? (
         <div className="workload-conflict-alert" role="alert">
           <div className="conflict-alert-icon">⚠️</div>
@@ -410,9 +454,9 @@ export default function EditEventForm({
             <ul className="conflict-dates-list">
               {fechasConConflicto.map(([fecha, horas]) => (
                 <li key={fecha}>
-                  Jornada <strong>"{fecha}"</strong>: suma <strong>{horas} horas</strong>{' '}
+                  Jornada <strong>"{isoToDisplayDate(fecha)}"</strong>: <strong>{horas}h planificadas</strong> (0h disponibles){' '}
                   <span className="excess-tag">
-                    (+{horas - formData.limiteHorasPorJornada}h sobre el límite)
+                    (+{Math.round((horas - formData.limiteHorasPorJornada) * 10) / 10}h sobre el límite)
                   </span>
                 </li>
               ))}
@@ -424,7 +468,7 @@ export default function EditEventForm({
         </div>
       ) : (
         <div className="workload-ok-badge">
-          ✓ Carga horaria balanceada: Ninguna jornada supera las {formData.limiteHorasPorJornada} horas recomendadas.
+          ✓ Carga horaria balanceada: Ninguna jornada supera las {formData.limiteHorasPorJornada} horas diarias permitidas.
         </div>
       )}
 
